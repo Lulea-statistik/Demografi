@@ -44,21 +44,51 @@ function dims(json){return json.id.map((id,i)=>({id,size:json.size[i],cats:json.
 function records(json){const ds=dims(json), vals=json.value||[];let output=[];
 for(let n=0;n<vals.length;n++){const value=vals[n];if(value===null||value===undefined)continue;
  let residue=n, record={value:Number(value)};for(let k=ds.length-1;k>=0;k--){let d=ds[k], ix=residue%d.size;residue=Math.floor(residue/d.size);
- let entries=Object.entries(d.index).sort((a,b)=>a[1]-b[1]), code=entries[ix]?.[0], label=d.cats.label?.[code]??code;
- let key=d.id.toLowerCase();if(/tid|månad|time/.test(key))record.month=code;else if(/region/.test(key))record.region=code;else if(/kön|kon|sex/.test(key))record.sex=String(label);else record.measure=String(label)}
+ let codes=Array.isArray(d.index)?d.index:Object.keys(d.index).sort((a,b)=>d.index[a]-d.index[b]), code=codes[ix], label=d.cats.label?.[code]??code;
+ let key=d.id.toLowerCase();if(/tid|månad|time/.test(key))record.month=code;else if(/region/.test(key))record.region=code;else if(/kön|kon|sex/.test(key))record.sex=String(label);else if(/contentscode|innehåll|mått/.test(key))record.measure=String(label)}
  if(/^\d{4}M\d{2}$/.test(record.month||'')&&Number(record.month.slice(0,4))>=2021)output.push(record);
 }return output}
-async function getTable(t){let res=await fetch(BASE+t.id+'/metadata?lang=sv');if(!res.ok)throw Error('Metadata '+t.id+': '+res.status);let m=await res.json();
- let reg=variable(m,['region']),measure=variable(m,['förändring','forandring']),sex=variable(m,['kön','kon']),time=variable(m,['månad','tid','time']);
- if(!reg||!measure||!sex||!time)throw Error('SCB har ändrat variablerna i '+t.id);
- const params=new URLSearchParams({lang:'sv'});
- params.set('valueCodes['+reg.code+']','2580');
- params.set('valueCodes['+measure.code+']','*');
- params.set('valueCodes['+sex.code+']','*');
- params.set('valueCodes['+time.code+']',t.start===2021?'from(2021M01)':'*');
- let url=BASE+t.id+'/data?'+params;
- let d=await fetch(url);if(!d.ok)throw Error('SCB-data '+t.id+': '+d.status);
- return records(await d.json()).filter(r=>{let y=Number(r.month.slice(0,4));return y>=t.start&&y<=t.end})}
+function metaDimensions(meta){
+ if(Array.isArray(meta.id)&&meta.dimension){
+  return meta.id.map(id=>{const d=meta.dimension[id],cat=d.category||{},idx=cat.index||{},codes=Array.isArray(idx)?idx:Object.keys(idx).sort((a,b)=>idx[a]-idx[b]);return {code:id,text:d.label||id,values:codes,valueTexts:codes.map(c=>cat.label?.[c]||c),elimination:!!d.extension?.elimination,time:(meta.role?.time||[]).includes(id)};});
+ }
+ return meta.variables||meta.Variables||[];
+}
+function matchVar(vars,pattern){return vars.find(v=>pattern.test(String(v.code)+' '+String(v.text)))}
+function selectTotal(v){
+ const codes=v.values||[],labels=v.valueTexts||[];
+ const i=labels.findIndex(x=>/^(totalt|total|samtliga|alla åldrar|summa|båda könen)$/i.test(String(x).trim()));
+ if(i>=0)return [codes[i]];
+ const j=codes.findIndex(x=>/^(TotSa|TotSA|TOTAL|SUM)$/i.test(String(x)));
+ if(j>=0)return [codes[j]];
+ return [codes[0]];
+}
+async function getTable(t){
+ let res=await fetch(BASE+t.id+'/metadata?lang=sv');
+ if(!res.ok)throw Error('Metadata '+t.id+': '+res.status);
+ const meta=await res.json(),vars=metaDimensions(meta);
+ const reg=matchVar(vars,/region/i),measure=matchVar(vars,/ContentsCode|innehåll|observation|statistikmått/i),
+ sex=matchVar(vars,/^(Kon|Kön|Sex)\b|\bkön\b/i),
+ time=vars.find(v=>v.time)||matchVar(vars,/^(Tid|Time|Månad|Manad)\b|\bmånad\b/i);
+ if(!reg||!measure||!time)throw Error('Variabler saknas i '+t.id+': '+vars.map(v=>v.code).join(', '));
+ const selections=new Map();
+ selections.set(reg.code,['2580']);
+ selections.set(measure.code,measure.values);
+ if(sex)selections.set(sex.code,sex.values);
+ const periods=time.values.filter(x=>/^\d{4}M\d{2}$/.test(String(x))&&Number(String(x).slice(0,4))>=t.start&&Number(String(x).slice(0,4))<=t.end);
+ if(!periods.length)throw Error('Ingen månadsperiod i '+t.id);
+ selections.set(time.code,periods);
+ for(const v of vars){
+  if(selections.has(v.code))continue;
+  if(v.elimination)continue;
+  selections.set(v.code,selectTotal(v));
+ }
+ const params=new URLSearchParams({lang:'sv',outputFormat:'json-stat2'});
+ for(const [k,v] of selections)params.set('valueCodes['+k+']',v.join(','));
+ const response=await fetch(BASE+t.id+'/data?'+params.toString());
+ if(!response.ok)throw Error('SCB-data '+t.id+': '+response.status+' '+(await response.text()).slice(0,200));
+ return records(await response.json()).filter(r=>{let y=Number(r.month.slice(0,4));return y>=t.start&&y<=t.end});
+}
 function sexClass(s){s=s.toLowerCase();return /kvinn|female/.test(s)?'women':/män|man|male/.test(s)?'men':'total'}
 function getData(metric,sex){return all.filter(r=>r.measure===metric&&sexClass(r.sex)===sex)}
 const monthNames=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];

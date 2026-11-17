@@ -40,6 +40,12 @@ footer{font-size:.87rem;line-height:1.65;margin-top:24px;color:var(--muted)}
 a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 .wide{grid-column:1/-1}
 .status:not(.error){display:none}.forecast-note{font-size:.79rem;color:var(--muted);margin-top:9px}.forecast-key{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin-top:10px}.forecast-key i{display:inline-block;width:22px;border-top:3px solid var(--accent);vertical-align:middle;margin-right:5px}.forecast-key .predicted{border-top-style:dashed}
+.forecast-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:5px 0 11px}
+.forecast-summary-label{font-size:.82rem;color:var(--muted);font-weight:650}
+.forecast-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;background:#f3f6fa;font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums}
+.forecast-pill.high{color:#2e7d32;border-color:#b9dbbc}
+.forecast-pill.mean{color:#005aa7;border-color:#b8d0ea}
+.forecast-pill.low{color:#b7434b;border-color:#e0b3b7}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}select{min-width:150px}}
 </style>
@@ -287,12 +293,25 @@ function forecastPanel(metric,sex){
  // Identical values may overlap. Place high/low first, mean last for accessible hover.
  for(const serie of series)drawPoints(serie.rows,serie.color,serie.name);
  out+='</svg>';
+ const december=f.year+'M12';
+ const decHigh=f.highForecast.find(r=>r.month===december);
+ const decMean=f.meanForecast.find(r=>r.month===december);
+ const decLow=f.lowForecast.find(r=>r.month===december);
+ const summaryValues=[
+  {key:'high',label:'Hög',row:decHigh},
+  {key:'mean',label:'Medel',row:decMean},
+  {key:'low',label:'Låg',row:decLow}
+ ];
+ const summary='<div class="forecast-summary" aria-label="Prognosvärden för december '+f.year+'">'+
+  '<span class="forecast-summary-label">December '+f.year+':</span>'+
+  summaryValues.map(v=>'<span class="forecast-pill '+v.key+'">'+v.label+': '+(v.row?fmt(Math.round(v.row.value)):'–')+'</span>').join('')+
+  '</div>';
  const count=f.samples.length?Math.min(...f.samples):0;
  const note=f.reason?f.reason:f.meanForecast.length?
   'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
   '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
   'Hela året är publicerat; ingen prognos behövs.';
- return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+out+
+ return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+summary+out+
   '<div class="forecast-key"><span><i></i>Observerat</span>'+
   '<span><i class="predicted"></i>Medelprognos</span>'+
   '<span><i class="predicted" style="border-color:#2e7d32"></i>Hög prognos</span>'+

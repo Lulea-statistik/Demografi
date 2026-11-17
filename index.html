@@ -4,24 +4,46 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Demografi – Luleå kommun</title>
 <style>
-:root{font-family:Segoe UI,Arial,sans-serif;color:#16263a;background:#f5f7fa}*{box-sizing:border-box}body{margin:0}
-header{background:#fff;border-bottom:1px solid #dce3eb;padding:22px max(22px,calc((100vw - 1260px)/2))}
-h1{margin:0;font-size:30px}header p{margin:5px 0 0;color:#536578}
-main{max-width:1260px;margin:auto;padding:24px 18px 50px}.filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:18px}
-.filters label{font-size:13px;font-weight:600;display:grid;gap:5px}select{background:#fff;border:1px solid #bac8d6;border-radius:6px;padding:9px;min-width:175px;color:#1d2d3d}
-.info{color:#617287;font-size:13px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
-.card,.panel{background:#fff;border:1px solid #e1e7ee;border-radius:9px;padding:18px;box-shadow:0 2px 7px #182d4109}
-.card small{color:#65778d;font-size:13px}.card b{font-size:25px;display:block;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.panel h2{font-size:18px;margin:0 0 4px}.panel p{font-size:12px;color:#63738a;margin:0 0 12px}
-svg{width:100%;height:auto;display:block;overflow:visible}.legend{display:flex;flex-wrap:wrap;gap:8px 15px;margin-top:10px}
-.legend span{font-size:12px;color:#53657b;display:flex;align-items:center;gap:6px}.swatch{width:18px;height:3px;display:inline-block}
-.status{padding:14px;margin-bottom:18px;background:#fff;border:1px solid #dce3eb;border-radius:8px;color:#53657b}
-.error{border-color:#d39898;color:#8c3030}footer{font-size:13px;line-height:1.6;margin-top:22px;color:#53657b}
-a{color:#155c92}.wide{grid-column:1/-1}@media(max-width:800px){.grid{grid-template-columns:1fr}h1{font-size:25px}}
+:root{--bg:#f5f7f9;--card:#fff;--text:#17212b;--muted:#5c6b78;--line:#d9e0e6;--accent:#005aa7;--accent-dark:#003d72;--focus:#0a6dc0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.5}
+header.hero{background:#fff;border-bottom:1px solid var(--line);padding:34px max(18px,calc((100vw - 1180px)/2)) 28px}
+.eyebrow{margin:0 0 6px;color:var(--accent);font-weight:700;font-size:.95rem}
+h1{margin:0;font-size:clamp(2rem,5vw,3.4rem);letter-spacing:-.04em;line-height:1.12}
+header.hero .lead{font-size:1.1rem;color:var(--muted);margin:10px 0 0}
+main{width:min(1180px,calc(100% - 32px));margin:auto;padding:24px 0 45px}
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:end;margin-bottom:18px}
+.filters label{font-size:.9rem;font-weight:650;display:grid;gap:6px}
+select{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:44px;padding:9px 12px;min-width:190px;color:var(--text);font:inherit}
+select:focus-visible,.data-point:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.info{color:var(--muted);font-size:.86rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card{border-top:4px solid var(--accent)}
+.card small{color:var(--muted);font-size:.82rem}
+.card b{font-size:1.65rem;display:block;margin:7px 0;color:var(--accent-dark)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.panel{position:relative;min-width:0}
+.panel h2{font-size:1.22rem;margin:0 0 4px}
+.panel p{font-size:.85rem;color:var(--muted);margin:0 0 12px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.data-point{cursor:crosshair;outline:none;touch-action:manipulation}
+.data-point:focus-visible{stroke:var(--accent-dark);stroke-width:2}
+.legend{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:10px}
+.legend span{font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+.swatch{width:18px;height:3px;display:inline-block}
+.status{padding:12px 16px;margin-bottom:18px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:7px;color:var(--muted)}
+.error{border-color:#d39898;color:#8c3030}
+.chart-tooltip{position:absolute;z-index:10;pointer-events:none;background:#17212b;color:#fff;border-radius:8px;padding:9px 12px;box-shadow:0 6px 18px #17212b30;max-width:min(270px,90%);font-size:.85rem;line-height:1.5;white-space:pre-line}
+.chart-tooltip[hidden]{display:none}
+footer{font-size:.87rem;line-height:1.65;margin-top:24px;color:var(--muted)}
+a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
+.wide{grid-column:1/-1}
+@media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}select{min-width:150px}}
 </style>
 </head>
 <body>
-<header><h1>Demografi – Luleå kommun</h1><p>SCB:s månadsstatistik · kommun 2580 · senaste fem hela åren och innevarande år</p></header>
+<header class="hero"><p class="eyebrow">Luleå kommun · officiell statistik</p><h1>Demografi – Luleå kommun</h1><p class="lead">SCB:s månadsstatistik · kommunkod 2580 · senaste fem hela åren och innevarande år</p></header>
 <main>
 <div class="filters">
 <label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label>
@@ -109,8 +131,9 @@ function getData(metric,sex){
  return [...byPeriod.values()].filter(Boolean).sort((a,b)=>a.month.localeCompare(b.month));
 }
 const monthNames=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+function safeAttr(text){return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
-function lineSVG(data){const W=560,H=250, left=55,right=18,top=18,bottom=34;
+function lineSVG(data,metric,sex){const W=560,H=250, left=55,right=18,top=18,bottom=34;
  let years=[...new Set(data.map(r=>Number(r.month.slice(0,4))))].sort(), values=data.map(r=>r.value);
  if(!values.length)return '<div class="info">Ingen publicerad statistik för detta mått.</div>';
  let min=Math.min(...values),max=Math.max(...values);if(min===max){min-=1;max+=1}let pad=(max-min)*0.08;min-=pad;max+=pad;
@@ -121,10 +144,15 @@ function lineSVG(data){const W=560,H=250, left=55,right=18,top=18,bottom=34;
  years.forEach((year,yi)=>{let pts=data.filter(r=>Number(r.month.slice(0,4))===year).sort((a,b)=>a.month.localeCompare(b.month));let color=year===latestYear?'#1065b3':year===latestYear-1?'#173e66':['#aab3c2','#8899ad','#697d94','#bec7d2','#93a8bb'][yi%5];
  let unique=new Map(pts.map(r=>[r.month,r]));let coordinates=[...unique.values()].map(r=>[X(Number(r.month.slice(-2))),Y(r.value),r]);if(!coordinates.length)return;
  out+='<polyline points="'+coordinates.map(p=>p[0]+','+p[1]).join(' ')+'" fill="none" stroke="'+color+'" stroke-width="'+(year===latestYear?4:2)+'" stroke-opacity="'+(year===latestYear?1:.55)+'" stroke-linecap="round" stroke-linejoin="round"/>';
- coordinates.forEach(p=>{out+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(year===latestYear?3.3:2.2)+'" fill="'+color+'"><title>'+p[2].month+': '+fmt(p[2].value)+'</title></circle>'});
+ coordinates.forEach(p=>{
+ const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+p[2].month+'\\n'+fmt(p[2].value)+' personer';
+ const accessible=metric+', '+$('sex').selectedOptions[0].text+', '+p[2].month+', '+fmt(p[2].value);
+ out+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(year===latestYear?3.3:2.2)+'" fill="'+color+'" pointer-events="none"/>';
+ out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(accessible)+'" data-tip="'+safeAttr(detail)+'" cx="'+p[0]+'" cy="'+p[1]+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(accessible)+'</title></circle>';
+});
  });return out+'</svg><div class="legend">'+years.map((y,i)=>{let color=y===latestYear?'#1065b3':y===latestYear-1?'#173e66':['#aab3c2','#8899ad','#697d94','#bec7d2','#93a8bb'][i%5];return '<span><i class="swatch" style="background:'+color+';opacity:'+(y===latestYear?1:.55)+'"></i>'+y+'</span>'}).join('')+'</div>'}
 function panel(metric,sex,wide=false){if(!metric)return '';let data=getData(metric,sex);
- return '<section class="panel '+(wide?'wide':'')+'"><h2>'+metric+'</h2><p>Månadsvis jämförelse per kalenderår · antal</p>'+lineSVG(data)+'</section>'}
+ return '<section class="panel '+(wide?'wide':'')+'"><h2>'+metric+'</h2><p>Månadsvis jämförelse per kalenderår · antal</p>'+lineSVG(data,metric,sex)+'<div class="chart-tooltip" role="status" hidden></div></section>'}
 function render(){if(!all.length)return;
  let sex=$('sex').value, priority=[roleMatch(['folkmängd']),roleMatch(['folkökning']),roleMatch(['födda']),roleMatch(['döda']),roleMatch(['inflyttade']),roleMatch(['utflyttade'])].filter(Boolean);
  let extra=$('metric').value, seen=new Set(), display=[...priority,extra].filter(m=>m&&!seen.has(canonicalMeasure(m))&&seen.add(canonicalMeasure(m)));
@@ -152,5 +180,23 @@ async function init(){try{
  $('status').className='status'+(failures.length?' error':'');
  render();
  }catch(e){$('status').className='status error';$('status').textContent='Kunde inte hämta SCB-data: '+e.message+'. Försök igen senare. Inga påhittade värden visas.'}}
+
+function showHover(target){
+ const panel=target.closest('.panel'),tip=panel?.querySelector('.chart-tooltip');
+ if(!tip)return;
+ tip.textContent=(target.dataset.tip||'').replace(/\\n/g,'\n');
+ tip.hidden=false;
+ const point=target.getBoundingClientRect(),bounds=panel.getBoundingClientRect();
+ const x=point.left+point.width/2-bounds.left,y=point.top-bounds.top;
+ const maxX=bounds.width-tip.offsetWidth-8;
+ tip.style.left=Math.max(8,Math.min(x+13,maxX))+'px';
+ tip.style.top=Math.max(6,y-tip.offsetHeight-12)+'px';
+}
+function hideHover(target){const tip=target.closest('.panel')?.querySelector('.chart-tooltip');if(tip)tip.hidden=true}
+$('charts').addEventListener('pointerover',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
+$('charts').addEventListener('pointerout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
+$('charts').addEventListener('focusin',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
+$('charts').addEventListener('focusout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
+$('charts').addEventListener('click',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
 $('sex').addEventListener('change',render);$('metric').addEventListener('change',render);init();
 </script></body></html>

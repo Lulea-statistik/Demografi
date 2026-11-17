@@ -7,6 +7,7 @@
 <style>
 :root{--bg:#f5f7f9;--card:#fff;--text:#17212b;--muted:#5c6b78;--line:#d9e0e6;--accent:#005aa7;--accent-dark:#003d72;--focus:#0a6dc0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)}
 *{box-sizing:border-box}
+html{font-size:16px} /* Basstorlek: minsta specificerade CSS- och SVG-text överstiger 10 px. */
 body{margin:0;background:var(--bg);color:var(--text);line-height:1.5}
 header.hero{background:#fff;border-bottom:1px solid var(--line);padding:34px max(18px,calc((100vw - 1180px)/2)) 28px}
 .eyebrow{margin:0 0 6px;color:var(--accent);font-weight:700;font-size:.95rem}
@@ -175,27 +176,30 @@ const fullMonthNames=['Januari','Februari','Mars','April','Maj','Juni','Juli','A
 function readablePeriod(period){const match=/^(\d{4})M(0[1-9]|1[0-2])$/.exec(String(period||''));return match?fullMonthNames[Number(match[2])-1]+' '+match[1]:period;}
 function safeAttr(text){return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
+// Välj lättlästa skalsteg (5, 10, 20, 50, 100 ...).
+// Noll inkluderas enbart i förändrings- och kumulativa prognosdiagram.
+function niceYAxis(values,includeZero=false){
+ const finite=values.filter(Number.isFinite);
+ if(!finite.length)return {min:0,max:10,ticks:[0,5,10],step:5};
+ let lo=Math.min(...finite),hi=Math.max(...finite);
+ if(includeZero){lo=Math.min(lo,0);hi=Math.max(hi,0)}
+ const spread=Math.max(hi-lo,1),target=spread/7;
+ const magnitude=Math.pow(10,Math.floor(Math.log10(target)));
+ let step=[1,2,5,10].map(n=>n*magnitude).find(v=>v>=target) || 10*magnitude;
+ // Befolkningsmått är heltal. 5 är minsta etikettsteg.
+ step=Math.max(5,step);
+ let min=Math.floor(lo/step)*step,max=Math.ceil(hi/step)*step;
+ if(min===max){if(includeZero){min-=step;max+=step}else{min-=step;max+=step}}
+ const ticks=[];
+ for(let i=Math.round(min/step);i<=Math.round(max/step);i++)ticks.push(i*step);
+ return {min,max,ticks,step};
+}
 function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=18,bottom=34;
  let years=[...new Set(data.map(r=>Number(r.month.slice(0,4))))].sort(), values=data.map(r=>r.value);
  if(!values.length)return '<div class="info">Ingen publicerad statistik för detta mått.</div>';
- let min=Math.min(...values),max=Math.max(...values);
  const negative=mode!=='level';
- let ticks=[];
- if(negative){
-  // Pick a decimal, human-readable tick step; snap axis limits outwards.
-  // A zero tick is always present; positive/negative extents need not be symmetrical.
-  const lo=Math.min(min,0),hi=Math.max(max,0),spread=Math.max(hi-lo,1);
-  const rough=spread/8,power=Math.pow(10,Math.floor(Math.log10(rough)));
-  const choices=[1,2,5,10,20,50,100].map(n=>n*power);
-  const step=choices.find(n=>n>=rough)||choices[choices.length-1];
-  min=Math.floor(lo/step)*step;max=Math.ceil(hi/step)*step;
-  if(min===max){min-=step;max+=step}
-  for(let k=Math.round(min/step);k<=Math.round(max/step);k++)ticks.push(k*step);
- }else{
-  if(min===max){min-=1;max+=1}
-  const pad=(max-min)*0.08;min-=pad;max+=pad;
-  for(let i=0;i<5;i++)ticks.push(min+(max-min)*i/4);
- }
+ const axis=niceYAxis(values,negative);
+ const {min,max,ticks}=axis;
  const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
  let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Månadsutveckling per år">';
  const zeroY=Y(0);
@@ -307,9 +311,8 @@ function forecastPanel(metric,sex){
  const cumulative=forecastView==='cumulative'&&!f.displayError;
  if(!f.observed.length)return '<section class="panel"><h2>Prognos till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
  const values=[...f.observed,...f.meanForecast,...f.highForecast,...f.lowForecast].map(r=>r.value);
- let min=Math.min(...values),max=Math.max(...values);
- if(min===max){min-=1;max+=1}
- const pad=(max-min)*.1;min-=pad;max+=pad;
+ const axis=niceYAxis(values,cumulative);
+ const {min,max,ticks}=axis;
  const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
  const series=[
   {name:'Låg prognos',rows:f.lowForecast,color:'#b7434b',key:'low'},
@@ -317,9 +320,10 @@ function forecastPanel(metric,sex){
   {name:'Medelprognos',rows:f.meanForecast,color:'#005aa7',key:'mean'}
  ];
  let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade värden och tre prognosalternativ för '+f.year+'">';
- for(let i=0;i<5;i++){
-  const v=min+(max-min)*i/4,y=Y(v);
-  out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e9edf2"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="#627389" font-size="12">'+fmt(Math.round(v))+'</text>';
+ for(const v of ticks){
+  const y=Y(v);
+  out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="'+(cumulative&&v===0?'#3e536a':'#e9edf2')+'" stroke-width="'+(cumulative&&v===0?'1.8':'1')+'"'+(cumulative&&v===0?' stroke-dasharray="5 3"':'')+'/>'+
+   '<text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="'+(cumulative&&v===0?'#3e536a':'#627389')+'" font-size="12">'+fmt(v)+'</text>';
  }
  monthNames.forEach((name,i)=>out+='<text x="'+X(i+1)+'" y="'+(H-8)+'" text-anchor="middle" fill="#63748a" font-size="11">'+name+'</text>');
  // Draw lines first and points afterwards so all forecast points remain hoverable.

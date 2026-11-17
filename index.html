@@ -207,51 +207,97 @@ function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=1
 function makeForecast(metric,sex){
  const data=getData(metric,sex),year=latestYear,history=[year-5,year-4,year-3,year-2,year-1];
  const observed=data.filter(r=>+r.month.slice(0,4)===year).sort((a,b)=>a.month.localeCompare(b.month));
- if(!observed.length)return {observed:[],predicted:[],samples:[],year,reason:'Saknar observationer för innevarande år.'};
+ const empty={observed,meanForecast:[],highForecast:[],lowForecast:[],samples:[],year,lastMonth:0,reason:null};
+ if(!observed.length)return {...empty,reason:'Saknar observationer för innevarande år.'};
  const last=observed[observed.length-1],lastMonth=+last.month.slice(-2);
- const map=new Map(data.map(r=>[r.month,r])),predicted=[],samples=[];let value=last.value;
+ const map=new Map(data.map(r=>[r.month,r]));
+ const f={...empty,lastMonth},levels={mean:last.value,high:last.value,low:last.value};
  for(let m=lastMonth+1;m<=12;m++){
   const deltas=[];
   for(const y of history){
-   const before=map.get(y+'M'+String(m-1).padStart(2,'0')),after=map.get(y+'M'+String(m).padStart(2,'0'));
-   if(before&&after)deltas.push(after.value-before.value);
+   const before=map.get(y+'M'+String(m-1).padStart(2,'0'));
+   const after=map.get(y+'M'+String(m).padStart(2,'0'));
+   if(before&&after)deltas.push({year:y,delta:after.value-before.value});
   }
-  if(!deltas.length)return {observed,predicted,samples,year,lastMonth,reason:'Historisk månadsförändring saknas för '+monthNames[m-1]+'.'};
-  const mean=deltas.reduce((a,b)=>a+b,0)/deltas.length;
-  value+=mean;predicted.push({month:year+'M'+String(m).padStart(2,'0'),value,forecast:true,sampleCount:deltas.length});
-  samples.push(deltas.length);
+  if(!deltas.length){
+   f.reason='Historisk månadsförändring saknas för '+monthNames[m-1]+'. Prognosen avbryts där.';
+   break;
+  }
+  const mean=deltas.reduce((sum,x)=>sum+x.delta,0)/deltas.length;
+  const high=deltas.reduce((best,x)=>x.delta>best.delta?x:best);
+  const low=deltas.reduce((best,x)=>x.delta<best.delta?x:best);
+  const changes={mean,high:high.delta,low:low.delta};
+  const month=year+'M'+String(m).padStart(2,'0');
+  const target={mean:'meanForecast',high:'highForecast',low:'lowForecast'};
+  for(const scenario of ['mean','high','low']){
+   levels[scenario]+=changes[scenario];
+   f[target[scenario]].push({
+    month,value:levels[scenario],forecast:true,scenario,
+    sampleCount:deltas.length,delta:changes[scenario],
+    sourceYear:scenario==='high'?high.year:scenario==='low'?low.year:null
+   });
+  }
+  f.samples.push(deltas.length);
  }
- return {observed,predicted,samples,year,lastMonth,reason:null};
+ return f;
 }
 function forecastPanel(metric,sex){
  const f=makeForecast(metric,sex),W=560,H=250,left=55,right=18,top=18,bottom=34;
  if(!f.observed.length)return '<section class="panel"><h2>Prognos till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
- const values=[...f.observed,...f.predicted].map(r=>r.value);
+ const values=[...f.observed,...f.meanForecast,...f.highForecast,...f.lowForecast].map(r=>r.value);
  let min=Math.min(...values),max=Math.max(...values);
  if(min===max){min-=1;max+=1}
  const pad=(max-min)*.1;min-=pad;max+=pad;
  const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
- let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade och prognostiserade värden för '+f.year+'">';
- for(let i=0;i<5;i++){const v=min+(max-min)*i/4,y=Y(v);out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e9edf2"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="#627389" font-size="12">'+fmt(Math.round(v))+'</text>'}
+ const series=[
+  {name:'Låg prognos',rows:f.lowForecast,color:'#b7434b',key:'low'},
+  {name:'Hög prognos',rows:f.highForecast,color:'#2e7d32',key:'high'},
+  {name:'Medelprognos',rows:f.meanForecast,color:'#005aa7',key:'mean'}
+ ];
+ let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade värden och tre prognosalternativ för '+f.year+'">';
+ for(let i=0;i<5;i++){
+  const v=min+(max-min)*i/4,y=Y(v);
+  out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e9edf2"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="#627389" font-size="12">'+fmt(Math.round(v))+'</text>';
+ }
  monthNames.forEach((name,i)=>out+='<text x="'+X(i+1)+'" y="'+(H-8)+'" text-anchor="middle" fill="#63748a" font-size="11">'+name+'</text>');
- function draw(rows,forecast){
-  let prev=null;
-  for(const r of rows){
-   const m=+r.month.slice(-2),x=X(m),y=Y(r.value);
-   if(prev&&m===prev.m+1)out+='<line x1="'+prev.x+'" y1="'+prev.y+'" x2="'+x+'" y2="'+y+'" stroke="#005aa7" stroke-width="3.3"'+(forecast?' stroke-dasharray="6 5"':'')+'/>';
-   const label=metric+', '+$('sex').selectedOptions[0].text+', '+r.month+', '+fmt(Math.round(r.value))+(forecast&&r.forecast?', prognos':'');
-   const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+r.month+'\\n'+fmt(Math.round(r.value))+' personer'+(r.forecast?'\\nPrognos; historiska förändringar: '+r.sampleCount+' år':'')+(r.derived?'\\nBeräknat från män + kvinnor':'');
-   out+='<circle cx="'+x+'" cy="'+y+'" r="3.8" fill="'+(r.forecast?'#fff':'#005aa7')+'" stroke="#005aa7" stroke-width="2" pointer-events="none"/>';
-   out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(label)+'" data-tip="'+safeAttr(detail)+'" cx="'+x+'" cy="'+y+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(label)+'</title></circle>';
-   prev={m,x,y};
+ // Draw lines first and points afterwards so all forecast points remain hoverable.
+ function drawLines(rows,color,dashed){
+  for(let i=1;i<rows.length;i++){
+   const a=rows[i-1],b=rows[i],monthA=+a.month.slice(-2),monthB=+b.month.slice(-2);
+   if(monthB!==monthA+1)continue;
+   out+='<line x1="'+X(monthA)+'" y1="'+Y(a.value)+'" x2="'+X(monthB)+'" y2="'+Y(b.value)+'" stroke="'+color+'" stroke-width="3.3"'+(dashed?' stroke-dasharray="6 5"':'')+'/>';
   }
  }
- draw(f.observed,false);
- if(f.predicted.length)draw([f.observed[f.observed.length-1],...f.predicted],true);
+ drawLines(f.observed,'#005aa7',false);
+ for(const serie of series)if(serie.rows.length)drawLines([f.observed[f.observed.length-1],...serie.rows],serie.color,true);
+ function drawPoints(rows,color,name){
+  for(const r of rows){
+   const month=+r.month.slice(-2),x=X(month),y=Y(r.value),forecast=!!r.forecast;
+   const label=name+', '+metric+', '+$('sex').selectedOptions[0].text+', '+r.month+', '+fmt(Math.round(r.value))+' personer';
+   const source=r.sourceYear?'\\nMånadsförändring från '+r.sourceYear:'';
+   const detail=name+'\\n'+metric+' · '+$('sex').selectedOptions[0].text+' · '+r.month+
+    '\\n'+fmt(Math.round(r.value))+' personer'+
+    (forecast?'\\nHistoriska förändringar: '+r.sampleCount+' år'+source:'')+
+    (r.derived?'\\nBeräknat från män + kvinnor':'');
+   out+='<circle cx="'+x+'" cy="'+y+'" r="3.8" fill="'+(forecast?'#fff':color)+'" stroke="'+color+'" stroke-width="2" pointer-events="none"/>';
+   out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(label)+'" data-tip="'+safeAttr(detail)+'" cx="'+x+'" cy="'+y+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(label)+'</title></circle>';
+  }
+ }
+ drawPoints(f.observed,'#005aa7','Observerat');
+ // Identical values may overlap. Place high/low first, mean last for accessible hover.
+ for(const serie of series)drawPoints(serie.rows,serie.color,serie.name);
  out+='</svg>';
  const count=f.samples.length?Math.min(...f.samples):0;
- const note=f.reason?f.reason:f.predicted.length?'Från '+monthNames[f.lastMonth-1]+' till december. Medelförändring för motsvarande kalendermånader '+(f.year-5)+'–'+(f.year-1)+'. Minst '+count+' historiska år per prognossteg.':'Hela året är publicerat; ingen prognos behövs.';
- return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+out+'<div class="forecast-key"><span><i></i>Observerat</span><span><i class="predicted"></i>Prognos</span></div><p class="forecast-note">'+safeAttr(note)+'</p><div class="chart-tooltip" role="status" hidden></div></section>';
+ const note=f.reason?f.reason:f.meanForecast.length?
+  'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
+  '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
+  'Hela året är publicerat; ingen prognos behövs.';
+ return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+out+
+  '<div class="forecast-key"><span><i></i>Observerat</span>'+
+  '<span><i class="predicted"></i>Medelprognos</span>'+
+  '<span><i class="predicted" style="border-color:#2e7d32"></i>Hög prognos</span>'+
+  '<span><i class="predicted" style="border-color:#b7434b"></i>Låg prognos</span></div>'+
+  '<p class="forecast-note">'+safeAttr(note)+'</p><div class="chart-tooltip" role="status" hidden></div></section>';
 }
 function panel(metric,sex,mode,title,description){
  const data=transformSeries(getData(metric,sex),mode);

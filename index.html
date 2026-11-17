@@ -69,7 +69,7 @@ body.focus-open{overflow:hidden}
 <body>
 <header class="hero"><div class="hero-brand">
 <img class="hero-logo" src="https://lulea-statistik.github.io/BR-brottsstatistik/lulea-kommun-mark.png?v=3" alt="Luleå kommun" width="72" height="54">
-<div class="hero-brand-text"><p class="eyebrow">Luleå kommun · officiell statistik</p><h1>Demografi – Luleå kommun</h1><p class="lead">SCB:s månadsstatistik · kommunkod 2580 · senaste fem hela åren och innevarande år</p></div>
+<div class="hero-brand-text"><p class="eyebrow">Luleå kommun · officiell statistik</p><h1>Demografi – Luleå kommun</h1><p class="lead">SCB:s månadsstatistik · senaste fem hela åren och innevarande år</p></div>
 </div></header>
 <main>
 <div class="filters">
@@ -171,6 +171,8 @@ function transformSeries(data,mode){
  });
 }
 const monthNames=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+const fullMonthNames=['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+function readablePeriod(period){const match=/^(\d{4})M(0[1-9]|1[0-2])$/.exec(String(period||''));return match?fullMonthNames[Number(match[2])-1]+' '+match[1]:period;}
 function safeAttr(text){return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
 function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=18,bottom=34;
@@ -368,7 +370,7 @@ function forecastPanel(metric,sex){
  const subtitle=cumulative?
   (canonicalMeasure(metric)==='befolkning'?'Ackumulerad förändring från januari · valt statistikmått':'Ackumulerad summa från januari · valt statistikmått'):
   'Månadsvärden · valt statistikmått';
- return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · '+subtitle+'</p>'+summary+out+
+ return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Innevarande år · '+subtitle+'</p>'+summary+out+
   '<div class="forecast-key"><span><i></i>Observerat</span>'+
   '<span><i class="predicted"></i>Medelprognos</span>'+
   '<span><i class="predicted" style="border-color:#2e7d32"></i>Hög prognos</span>'+
@@ -393,7 +395,7 @@ const chartsMarkup=panel(metric,sex,'level','Månadsutveckling','Värde för res
  +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.')
  +forecastPanel(metric,sex);
  $('charts').innerHTML=chartsMarkup.replaceAll('<section class="panel">','<section class="panel"><button type="button" class="focus-button" data-focus-toggle aria-label="Öppna diagram i fokusläge" aria-pressed="false" title="Öppna diagram i fokusläge">⛶ Fokus</button>');
- $('updated').textContent='Senaste tillgängliga SCB-period: '+latestMonth+(getData(metric,sex).some(r=>r.derived)?' · beräknad total förekommer':'');
+ $('updated').textContent='Senaste tillgängliga SCB-period: '+readablePeriod(latestMonth);
 }
 async function init(){try{
  const results=await Promise.allSettled(TABLES.map(getTable));let failures=results.filter(r=>r.status==='rejected');

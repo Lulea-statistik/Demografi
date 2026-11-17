@@ -91,7 +91,7 @@ async function getTable(t){
 }
 function sexClass(s){s=String(s||'').toLocaleLowerCase('sv-SE').trim();return /^(kvinnor|kvinna|female|women)$/.test(s)?'women':/^(män|man|male|men)$/.test(s)?'men':/^(totalt|total|båda könen|samtliga)$/.test(s)?'total':'unknown'}
 function canonicalMeasure(name){
- return String(name||'').toLocaleLowerCase('sv-SE').normalize('NFC').replace(/\\s+/g,' ').trim()
+ return String(name||'').toLocaleLowerCase('sv-SE').normalize('NFC').replace(/\s+/g,' ').trim()
   .replace(/^folkmängd$/,'befolkning');
 }
 function getData(metric,sex){
@@ -101,7 +101,7 @@ function getData(metric,sex){
  for(const r of rows){
   const key=r.month;
   if(!byPeriod.has(key))byPeriod.set(key,r);
-  else if(byPeriod.get(key).value!==r.value){
+  else if(byPeriod.get(key) && byPeriod.get(key).value!==r.value){
    console.warn('Motstridiga SCB-värden för mått/kön/månad:',metric,sex,key);
    byPeriod.set(key,null);
   }

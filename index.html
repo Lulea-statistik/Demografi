@@ -46,6 +46,9 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 .forecast-pill.high{color:#2e7d32;border-color:#b9dbbc}
 .forecast-pill.mean{color:#005aa7;border-color:#b8d0ea}
 .forecast-pill.low{color:#b7434b;border-color:#e0b3b7}
+.forecast-toggle{border:1px solid var(--accent);border-radius:8px;background:#fff;color:var(--accent-dark);padding:5px 9px;font:inherit;font-size:.79rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.forecast-toggle:hover{background:#edf5ff}
+.forecast-toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}select{min-width:150px}}
 </style>
@@ -66,7 +69,7 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 <script>
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
 const TABLES=[{id:'TAB1625',start:2021,end:2024},{id:'TAB6473',start:2025,end:9999}];
-let all=[], measures=[], latestYear=0, measureCatalog=[];
+let all=[], measures=[], latestYear=0, measureCatalog=[], forecastView='monthly';
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:0});
 function items(v){return (v.values||v.valueCodes||[]).map((x,i)=>typeof x==='object'?{code:String(x.code??x.value??i),text:String(x.text??x.label??x.code??i)}:{code:String(x),text:String((v.valueTexts||v.valueText||[])[i]??x)});}
 function variable(meta,words){let vars=meta.variables||meta.Variables||[];return vars.find(v=>words.some(w=>String(v.text||v.label||v.code).toLowerCase().includes(w)))}
@@ -247,8 +250,42 @@ function makeForecast(metric,sex){
  }
  return f;
 }
+function forecastDisplaySeries(f,metric){
+ // For levels such as population, summing monthly stocks would be meaningless.
+ // For additive monthly flow measures, cumulative means year-to-date sum.
+ const population=canonicalMeasure(metric)==='befolkning';
+ function convert(rows,startSum=0,baseValue=0){
+  let total=startSum,previousMonth=0;
+  return rows.map(r=>{
+   const m=+r.month.slice(-2);
+   if(previousMonth&&m!==previousMonth+1)return {...r,value:NaN};
+   previousMonth=m;
+   total+=r.value;
+   return {...r,value:population?r.value-baseValue:total};
+  });
+ }
+ const observed=f.observed;
+ if(forecastView!=='cumulative'||!observed.length)return f;
+ const first=observed[0],complete=+first.month.slice(-2)===1 &&
+  observed.every((r,i)=>+r.month.slice(-2)===i+1);
+ if(!complete)return {...f,displayError:'Kumulativ visning kräver en obruten serie från januari. Månadsvyn visas i stället.'};
+ const observedValues=convert(observed,0,first.value);
+ const total=observed.reduce((sum,r)=>sum+r.value,0);
+ function project(rows){
+  let cumulative=total,prior=+observed[observed.length-1].month.slice(-2);
+  return rows.map(r=>{
+   const m=+r.month.slice(-2);
+   if(m!==prior+1)return {...r,value:NaN};
+   prior=m;cumulative+=r.value;
+   return {...r,value:population?r.value-first.value:cumulative};
+  });
+ }
+ return {...f,observed:observedValues,meanForecast:project(f.meanForecast),
+  highForecast:project(f.highForecast),lowForecast:project(f.lowForecast)};
+}
 function forecastPanel(metric,sex){
- const f=makeForecast(metric,sex),W=560,H=250,left=55,right=18,top=18,bottom=34;
+ const raw=makeForecast(metric,sex),f=forecastDisplaySeries(raw,metric),W=560,H=250,left=55,right=18,top=18,bottom=34;
+ const cumulative=forecastView==='cumulative'&&!f.displayError;
  if(!f.observed.length)return '<section class="panel"><h2>Prognos till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
  const values=[...f.observed,...f.meanForecast,...f.highForecast,...f.lowForecast].map(r=>r.value);
  let min=Math.min(...values),max=Math.max(...values);
@@ -282,7 +319,7 @@ function forecastPanel(metric,sex){
    const label=name+', '+metric+', '+$('sex').selectedOptions[0].text+', '+r.month+', '+fmt(Math.round(r.value))+' personer';
    const source=r.sourceYear?'\\nMånadsförändring från '+r.sourceYear:'';
    const detail=name+'\\n'+metric+' · '+$('sex').selectedOptions[0].text+' · '+r.month+
-    '\\n'+fmt(Math.round(r.value))+' personer'+
+    '\\n'+fmt(Math.round(r.value))+' personer'+(cumulative?'\\nKumulativ visning':'\\nMånadsvis visning')+
     (forecast?'\\nHistoriska förändringar: '+r.sampleCount+' år'+source:'')+
     (r.derived?'\\nBeräknat från män + kvinnor':'');
    out+='<circle cx="'+x+'" cy="'+y+'" r="3.8" fill="'+(forecast?'#fff':color)+'" stroke="'+color+'" stroke-width="2" pointer-events="none"/>';
@@ -303,19 +340,23 @@ function forecastPanel(metric,sex){
   {key:'low',label:'Låg',row:decLow}
  ];
  const summary='<div class="forecast-summary" aria-label="Prognosvärden för december '+f.year+'">'+
-  '<span class="forecast-summary-label">December '+f.year+':</span>'+
+  '<span class="forecast-summary-label">December '+f.year+(cumulative?' · kumulativt':' · månadsvis')+':</span>'+
   summaryValues.map(v=>'<span class="forecast-pill '+v.key+'">'+v.label+': '+(v.row?fmt(Math.round(v.row.value)):'–')+'</span>').join('')+
   '</div>';
  const count=f.samples.length?Math.min(...f.samples):0;
- const note=f.reason?f.reason:f.meanForecast.length?
+ const note=f.displayError||f.reason?f.displayError||f.reason:f.meanForecast.length?
   'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
   '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
   'Hela året är publicerat; ingen prognos behövs.';
- return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+summary+out+
+ const subtitle=cumulative?
+  (canonicalMeasure(metric)==='befolkning'?'Ackumulerad förändring från januari · valt statistikmått':'Ackumulerad summa från januari · valt statistikmått'):
+  'Månadsvärden · valt statistikmått';
+ return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · '+subtitle+'</p>'+summary+out+
   '<div class="forecast-key"><span><i></i>Observerat</span>'+
   '<span><i class="predicted"></i>Medelprognos</span>'+
   '<span><i class="predicted" style="border-color:#2e7d32"></i>Hög prognos</span>'+
-  '<span><i class="predicted" style="border-color:#b7434b"></i>Låg prognos</span></div>'+
+  '<span><i class="predicted" style="border-color:#b7434b"></i>Låg prognos</span>'+
+  '<button type="button" class="forecast-toggle" data-forecast-toggle="true" aria-pressed="'+(cumulative?'true':'false')+'">'+(cumulative?'Visa månadsvis':'Visa kumulativ')+'</button></div>'+
   '<p class="forecast-note">'+safeAttr(note)+'</p><div class="chart-tooltip" role="status" hidden></div></section>';
 }
 function panel(metric,sex,mode,title,description){
@@ -367,5 +408,10 @@ $('charts').addEventListener('pointerout',event=>{const p=event.target.closest?.
 $('charts').addEventListener('focusin',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
 $('charts').addEventListener('focusout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
 $('charts').addEventListener('click',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
+$('charts').addEventListener('click',event=>{
+ if(!event.target.closest?.('[data-forecast-toggle]'))return;
+ forecastView=forecastView==='monthly'?'cumulative':'monthly';
+ render();
+});
 $('sex').addEventListener('change',render);$('metric').addEventListener('change',render);init();
 </script></body></html>

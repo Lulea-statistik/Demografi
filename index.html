@@ -53,6 +53,15 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 .forecast-toggle{border:1px solid var(--accent);border-radius:8px;background:#fff;color:var(--accent-dark);padding:5px 9px;font:inherit;font-size:.79rem;font-weight:700;cursor:pointer;white-space:nowrap}
 .forecast-toggle:hover{background:#edf5ff}
 .forecast-toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.focus-button{float:right;margin:-2px 0 8px 12px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--accent-dark);font:inherit;font-size:.78rem;font-weight:700;cursor:pointer}
+.focus-button:hover{background:#edf5ff;border-color:var(--accent)}
+.focus-button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.focus-dialog{border:1px solid var(--line);border-radius:14px;padding:12px;width:min(96vw,1500px);max-width:none;max-height:94vh;overflow:auto;background:var(--bg);color:var(--text);box-shadow:0 16px 55px #091f3960}
+.focus-dialog::backdrop{background:#101e2a9c}
+.focus-dialog .panel{width:100%;padding:22px;min-height:0}
+.focus-dialog .panel svg{display:block;width:100%;height:auto}
+.focus-placeholder{border:1px dashed var(--line);border-radius:12px;min-height:220px;background:#edf2f7}
+body.focus-open{overflow:hidden}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}.hero-brand{gap:12px}.hero-logo{height:48px;max-width:64px}select{min-width:150px}}
 </style>
@@ -71,6 +80,7 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 <p id="status" class="status" role="status">Hämtar officiell månadsstatistik från SCB …</p>
 <div id="cards" class="cards"></div>
 <div id="charts" class="grid"></div>
+<dialog id="chart-focus" class="focus-dialog" aria-label="Diagram i fokusläge"><div id="focus-content"></div></dialog>
 <footer><strong>Källa:</strong> Statistiska centralbyrån (SCB), tabellerna <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/ManadBefStatRegion/">ManadBefStatRegion</a> (till 2024) och <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">MBefStatRegionCKM</a> (från 2025). Från 2025 tillför SCB kontrollerad slumpmässig osäkerhet för sekretesskydd. Om officiell total saknas för ett statistikmått, och både män och kvinnor finns för samma månad, beräknas totalen som män + kvinnor och märks som beräknad. För mått som inte är additiva måste dessa beräknade totaler granskas separat. Därför kan totaler avvika från summan av delarna. Publicerade månader kan saknas; inga framtida månader ersätts med noll. Befolkningsförändringar kan hänföras till januari när exakt månad är okänd.</footer>
 </main>
 <script>
@@ -378,10 +388,11 @@ function render(){
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
  +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+(latest?.derived?' · beräknat':'')+'</small></div>'
  +'<div class="card"><small>År som jämförs</small><b>'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+'</b><small>Senaste fem hela åren + innevarande</small></div>';
-$('charts').innerHTML=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
+const chartsMarkup=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
  +panel(metric,sex,'january','Utveckling från januari','Januari = 0 varje år; skillnaden från januari visas för varje månad.')
  +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.')
  +forecastPanel(metric,sex);
+ $('charts').innerHTML=chartsMarkup.replaceAll('<section class="panel">','<section class="panel"><button type="button" class="focus-button" data-focus-toggle aria-label="Öppna diagram i fokusläge" aria-pressed="false" title="Öppna diagram i fokusläge">⛶ Fokus</button>');
  $('updated').textContent='Senaste tillgängliga SCB-period: '+latestMonth+(getData(metric,sex).some(r=>r.derived)?' · beräknad total förekommer':'');
 }
 async function init(){try{
@@ -410,15 +421,56 @@ function showHover(target){
  tip.style.top=Math.max(6,y-tip.offsetHeight-12)+'px';
 }
 function hideHover(target){const tip=target.closest('.panel')?.querySelector('.chart-tooltip');if(tip)tip.hidden=true}
-$('charts').addEventListener('pointerover',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
-$('charts').addEventListener('pointerout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
-$('charts').addEventListener('focusin',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
-$('charts').addEventListener('focusout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
-$('charts').addEventListener('click',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
-$('charts').addEventListener('click',event=>{
- if(!event.target.closest?.('[data-forecast-toggle]'))return;
- forecastView=forecastView==='monthly'?'cumulative':'monthly';
- render();
-});
+let focusedPanel=null,focusPlaceholder=null,focusIndex=-1;
+function openFocus(index){
+ if(focusedPanel)closeFocus();
+ const root=$('charts'),panels=[...root.querySelectorAll(':scope > .panel')],panel=panels[index];
+ if(!panel)return;
+ const placeholder=document.createElement('div');
+ placeholder.className='focus-placeholder';placeholder.setAttribute('aria-hidden','true');
+ root.insertBefore(placeholder,panel);
+ focusPlaceholder=placeholder;focusedPanel=panel;focusIndex=index;
+ $('focus-content').appendChild(panel);
+ const button=panel.querySelector('[data-focus-toggle]');
+ if(button){button.textContent='✕ Stäng fokus';button.setAttribute('aria-label','Stäng fokusläge');button.setAttribute('title','Stäng fokusläge');button.setAttribute('aria-pressed','true')}
+ document.body.classList.add('focus-open');
+ $('chart-focus').showModal();
+ button?.focus();
+}
+function closeFocus(){
+ if(!focusedPanel)return;
+ const panel=focusedPanel,placeholder=focusPlaceholder;
+ const button=panel.querySelector('[data-focus-toggle]');
+ if(button){button.textContent='⛶ Fokus';button.setAttribute('aria-label','Öppna diagram i fokusläge');button.setAttribute('title','Öppna diagram i fokusläge');button.setAttribute('aria-pressed','false')}
+ placeholder?.replaceWith(panel);
+ focusedPanel=null;focusPlaceholder=null;focusIndex=-1;
+ if($('chart-focus').open)$('chart-focus').close();
+ document.body.classList.remove('focus-open');
+ button?.focus();
+}
+$('chart-focus').addEventListener('cancel',event=>{event.preventDefault();closeFocus()});
+for(const root of [$('charts'),$('chart-focus')]){
+ root.addEventListener('pointerover',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
+ root.addEventListener('pointerout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
+ root.addEventListener('focusin',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
+ root.addEventListener('focusout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});
+ root.addEventListener('click',event=>{
+  const focusButton=event.target.closest?.('[data-focus-toggle]');
+  if(focusButton){
+   if(focusedPanel){closeFocus();return}
+   const parent=focusButton.closest('.panel');
+   openFocus([...$('charts').children].filter(el=>el.matches('.panel')).indexOf(parent));
+   return;
+  }
+  const point=event.target.closest?.('.data-point');
+  if(point)showHover(point);
+  if(!event.target.closest?.('[data-forecast-toggle]'))return;
+  const previousFocus=focusIndex;
+  if(focusedPanel)closeFocus();
+  forecastView=forecastView==='monthly'?'cumulative':'monthly';
+  render();
+  if(previousFocus>=0)openFocus(previousFocus);
+ });
+}
 $('sex').addEventListener('change',render);$('metric').addEventListener('change',render);init();
 </script></body></html>

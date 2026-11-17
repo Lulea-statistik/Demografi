@@ -45,7 +45,7 @@ function records(json){const ds=dims(json), vals=json.value||[];let output=[];
 for(let n=0;n<vals.length;n++){const value=vals[n];if(value===null||value===undefined)continue;
  let residue=n, record={value:Number(value)};for(let k=ds.length-1;k>=0;k--){let d=ds[k], ix=residue%d.size;residue=Math.floor(residue/d.size);
  let codes=Array.isArray(d.index)?d.index:Object.keys(d.index).sort((a,b)=>d.index[a]-d.index[b]), code=codes[ix], label=d.cats.label?.[code]??code;
- let key=d.id.toLowerCase();if(/tid|månad|time/.test(key))record.month=code;else if(/region/.test(key))record.region=code;else if(/kön|kon|sex/.test(key))record.sex=String(label);else if(/contentscode|innehåll|mått/.test(key)){record.measure=String(label);record.measureCode=String(code)}}
+ let key=d.id.toLowerCase();if(/tid|månad|time/.test(key))record.month=code;else if(/region/.test(key))record.region=code;else if(/kön|kon|sex/.test(key))record.sex=String(label);else if(/förändring|forandring/.test(key)){record.measure=String(label);record.measureCode=String(code)}else if(/contentscode|innehåll/.test(key)){record.unitLabel=String(label);record.unitCode=String(code)}}
  if(/^\d{4}M\d{2}$/.test(record.month||'')&&Number(record.month.slice(0,4))>=2021)output.push(record);
 }return output}
 function metaDimensions(meta){
@@ -67,7 +67,7 @@ async function getTable(t){
  let res=await fetch(BASE+t.id+'/metadata?lang=sv');
  if(!res.ok)throw Error('Metadata '+t.id+': '+res.status);
  const meta=await res.json(),vars=metaDimensions(meta);
- const reg=matchVar(vars,/region/i),measure=matchVar(vars,/ContentsCode|innehåll|observation|statistikmått/i),
+ const reg=matchVar(vars,/region/i),measure=matchVar(vars,/förändring|forandring/i),
  sex=matchVar(vars,/^(Kon|Kön|Sex)\b|\bkön\b/i),
  time=vars.find(v=>v.time)||matchVar(vars,/^(Tid|Time|Månad|Manad)\b|\bmånad\b/i);
  if(!reg||!measure||!time)throw Error('Variabler saknas i '+t.id+': '+vars.map(v=>v.code).join(', '));
@@ -89,32 +89,27 @@ async function getTable(t){
  if(!response.ok)throw Error('SCB-data '+t.id+': '+response.status+' '+(await response.text()).slice(0,200));
  return records(await response.json()).filter(r=>{let y=Number(r.month.slice(0,4));return y>=t.start&&y<=t.end});
 }
-function sexClass(s){s=s.toLowerCase();return /kvinn|female/.test(s)?'women':/män|man|male/.test(s)?'men':'total'}
+function sexClass(s){s=String(s||'').toLocaleLowerCase('sv-SE').trim();return /^(kvinnor|kvinna|female|women)$/.test(s)?'women':/^(män|man|male|men)$/.test(s)?'men':/^(totalt|total|båda könen|samtliga)$/.test(s)?'total':'unknown'}
+function canonicalMeasure(name){
+ return String(name||'').toLocaleLowerCase('sv-SE').normalize('NFC').replace(/\s+/g,' ').trim()
+  .replace(/^folkmängd$/,'befolkning');
+}
 function getData(metric,sex){
- // A SCB display label is not a unique statistic: distinguish actual codes and remove collisions.
- const candidates=all.filter(r=>r.measure===metric&&sexClass(r.sex)===sex);
- const groups=new Map();
- for(const row of candidates){const key=row.measureCode||row.measure; if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}
- if(!groups.size)return [];
- // Prefer the statistical series that is continuous with the previous published year.
- const older=candidates.filter(r=>Number(r.month.slice(0,4))<=2024);
- const reference=older.length?older.sort((a,b)=>b.month.localeCompare(a.month))[0].value:null;
- let ranked=[...groups.values()].map(rows=>{
-   const months=new Map();for(const r of rows){if(!months.has(r.month))months.set(r.month,r)}
-   const uniq=[...months.values()],modern=uniq.filter(r=>Number(r.month.slice(0,4))>=2025);
-   const first=modern.sort((a,b)=>a.month.localeCompare(b.month))[0];
-   const distance=reference!==null&&first?Math.abs(first.value-reference)/Math.max(1,reference):0;
-   return {rows:uniq,score:distance,latest:uniq.at(-1)?.month||''};
- });
- ranked.sort((a,b)=>a.score-b.score||b.rows.length-a.rows.length);
- // Select older observations from their original table, newer from closest comparable code.
- const old=older.filter(r=>r.measureCode===ranked.find(g=>g.rows.some(x=>Number(x.month.slice(0,4))<=2024))?.rows[0]?.measureCode);
- const newer=ranked.filter(g=>g.rows.some(r=>Number(r.month.slice(0,4))>=2025)).sort((a,b)=>a.score-b.score)[0]?.rows.filter(r=>Number(r.month.slice(0,4))>=2025)||[];
- const output=[...old,...newer].sort((a,b)=>a.month.localeCompare(b.month));
- return [...new Map(output.map(r=>[r.month,r])).values()];
+ const target=canonicalMeasure(metric);
+ const rows=all.filter(r=>canonicalMeasure(r.measure)===target&&sexClass(r.sex)===sex&&r.measureCode);
+ const byPeriod=new Map();
+ for(const r of rows){
+  const key=r.month;
+  if(!byPeriod.has(key))byPeriod.set(key,r);
+  else if(byPeriod.get(key) && byPeriod.get(key).value!==r.value){
+   console.warn('Motstridiga SCB-värden för mått/kön/månad:',metric,sex,key);
+   byPeriod.set(key,null);
+  }
+ }
+ return [...byPeriod.values()].filter(Boolean).sort((a,b)=>a.month.localeCompare(b.month));
 }
 const monthNames=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
-function roleMatch(words){return measures.find(m=>words.some(w=>m.toLowerCase().includes(w)))}
+function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
 function lineSVG(data){const W=560,H=250, left=55,right=18,top=18,bottom=34;
  let years=[...new Set(data.map(r=>Number(r.month.slice(0,4))))].sort(), values=data.map(r=>r.value);
  if(!values.length)return '<div class="info">Ingen publicerad statistik för detta mått.</div>';
@@ -132,13 +127,13 @@ function panel(metric,sex,wide=false){if(!metric)return '';let data=getData(metr
  return '<section class="panel '+(wide?'wide':'')+'"><h2>'+metric+'</h2><p>Månadsvis jämförelse per kalenderår · antal</p>'+lineSVG(data)+'</section>'}
 function render(){if(!all.length)return;
  let sex=$('sex').value, priority=[roleMatch(['folkmängd']),roleMatch(['folkökning']),roleMatch(['födda']),roleMatch(['döda']),roleMatch(['inflyttade']),roleMatch(['utflyttade'])].filter(Boolean);
- let extra=$('metric').value, seen=new Set(), display=[...priority,extra].filter(m=>m&&!seen.has(m)&&seen.add(m));
- let pop=getData(priority[0]||'',sex).sort((a,b)=>a.month.localeCompare(b.month));
+ let extra=$('metric').value, seen=new Set(), display=[...priority,extra].filter(m=>m&&!seen.has(canonicalMeasure(m))&&seen.add(canonicalMeasure(m)));
+ let populationMeasure=measures.find(m=>canonicalMeasure(m)==='befolkning')||priority[0]||'';let pop=getData(populationMeasure,sex).sort((a,b)=>a.month.localeCompare(b.month));
  let latestMonth=all.map(r=>r.month).sort().at(-1),latest=pop.filter(r=>r.month===latestMonth).at(-1);
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
  +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+'</small></div>'
  +'<div class="card"><small>År som jämförs</small><b>'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+'</b><small>Senaste fem hela åren + innevarande</small></div>';
- const newerMeasures=measures.filter(m=>!priority.includes(m)&&!display.includes(m)&&all.some(r=>r.measure===m&&Number(r.month.slice(0,4))>=2025)&&!all.some(r=>r.measure===m&&Number(r.month.slice(0,4))<2025));
+ const newerMeasures=measures.filter(m=>!priority.includes(m)&&!display.includes(m)&&all.some(r=>r.measure===m&&Number(r.month.slice(0,4))>=2025)&&!all.some(r=>canonicalMeasure(r.measure)===canonicalMeasure(m)&&Number(r.month.slice(0,4))<2025));
  $('charts').innerHTML=display.map(m=>panel(m,sex,m===extra&&!priority.includes(m))).join('')
  +(newerMeasures.length?'<section class="wide"><h2>Nya statistikserier från 2025</h2><p class="info">Mått som saknas i den äldre tabellen. Ingen historik före 2025 antas.</p></section>'+newerMeasures.map(m=>panel(m,sex)).join(''):'');
 
@@ -149,8 +144,8 @@ async function init(){try{
  all=results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value);
  if(!all.length)throw Error(failures.map(r=>r.reason.message).join('; '));
  latestYear=Math.max(...all.map(r=>Number(r.month.slice(0,4))));
- let newest=latestYear-5;all=all.filter(r=>Number(r.month.slice(0,4))>=newest);
- measures=[...new Set(all.map(r=>r.measure))].sort((a,b)=>a.localeCompare(b,'sv'));
+ let newest=latestYear-5;all=all.filter(r=>Number(r.month.slice(0,4))>=newest && r.measure && ['total','men','women'].includes(sexClass(r.sex)));
+ measures=[...new Set(all.map(r=>r.measure).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'sv'));
  let priority=[roleMatch(['folkmängd']),roleMatch(['folkökning']),roleMatch(['födda']),roleMatch(['döda']),roleMatch(['inflyttade']),roleMatch(['utflyttade'])];
  $('metric').innerHTML='<option value="">Välj ett ytterligare mått</option>'+measures.filter(m=>!priority.includes(m)).map(m=>'<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>').join('');
  $('status').textContent=failures.length?'Varning: en SCB-tabell kunde inte hämtas. Visar tillgänglig delserie.':'Data hämtade från SCB:s officiella statistikdatabas.';

@@ -39,9 +39,7 @@ svg{width:100%;height:auto;display:block;overflow:visible}
 footer{font-size:.87rem;line-height:1.65;margin-top:24px;color:var(--muted)}
 a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 .wide{grid-column:1/-1}
-.status-panel{display:flex;flex-direction:column;justify-content:flex-start}
-.status-panel .status{margin:10px 0 0}
-.status-panel h2{color:var(--accent-dark)}
+.status:not(.error){display:none}.forecast-note{font-size:.79rem;color:var(--muted);margin-top:9px}.forecast-key{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin-top:10px}.forecast-key i{display:inline-block;width:22px;border-top:3px solid var(--accent);vertical-align:middle;margin-right:5px}.forecast-key .predicted{border-top-style:dashed}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}select{min-width:150px}}
 </style>
@@ -54,10 +52,9 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 <label>Statistikmått <select id="metric"><option value="">Läser SCB:s mått …</option></select></label>
 <span id="updated" class="info"></span>
 </div>
+<p id="status" class="status" role="status">Hämtar officiell månadsstatistik från SCB …</p>
 <div id="cards" class="cards"></div>
-<div id="charts" class="grid">
-<section class="panel status-panel"><h2>Datastatus</h2><p id="status" class="status" role="status">Hämtar officiell månadsstatistik från SCB …</p></section>
-</div>
+<div id="charts" class="grid"></div>
 <footer><strong>Källa:</strong> Statistiska centralbyrån (SCB), tabellerna <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/ManadBefStatRegion/">ManadBefStatRegion</a> (till 2024) och <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">MBefStatRegionCKM</a> (från 2025). Från 2025 tillför SCB kontrollerad slumpmässig osäkerhet för sekretesskydd. Om officiell total saknas för ett statistikmått, och både män och kvinnor finns för samma månad, beräknas totalen som män + kvinnor och märks som beräknad. För mått som inte är additiva måste dessa beräknade totaler granskas separat. Därför kan totaler avvika från summan av delarna. Publicerade månader kan saknas; inga framtida månader ersätts med noll. Befolkningsförändringar kan hänföras till januari när exakt månad är okänd.</footer>
 </main>
 <script>
@@ -207,6 +204,55 @@ function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=1
  out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(accessible)+'" data-tip="'+safeAttr(detail)+'" cx="'+p[0]+'" cy="'+p[1]+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(accessible)+'</title></circle>';
 });
  });return out+'</svg><div class="legend">'+years.map((y,i)=>{let color=y===latestYear?'#1065b3':y===latestYear-1?'#173e66':['#aab3c2','#8899ad','#697d94','#bec7d2','#93a8bb'][i%5];return '<span><i class="swatch" style="background:'+color+';opacity:'+(y===latestYear?1:.55)+'"></i>'+y+'</span>'}).join('')+'</div>'}
+function makeForecast(metric,sex){
+ const data=getData(metric,sex),year=latestYear,history=[year-5,year-4,year-3,year-2,year-1];
+ const observed=data.filter(r=>+r.month.slice(0,4)===year).sort((a,b)=>a.month.localeCompare(b.month));
+ if(!observed.length)return {observed:[],predicted:[],samples:[],year,reason:'Saknar observationer för innevarande år.'};
+ const last=observed[observed.length-1],lastMonth=+last.month.slice(-2);
+ const map=new Map(data.map(r=>[r.month,r])),predicted=[],samples=[];let value=last.value;
+ for(let m=lastMonth+1;m<=12;m++){
+  const deltas=[];
+  for(const y of history){
+   const before=map.get(y+'M'+String(m-1).padStart(2,'0')),after=map.get(y+'M'+String(m).padStart(2,'0'));
+   if(before&&after)deltas.push(after.value-before.value);
+  }
+  if(!deltas.length)return {observed,predicted,samples,year,lastMonth,reason:'Historisk månadsförändring saknas för '+monthNames[m-1]+'.'};
+  const mean=deltas.reduce((a,b)=>a+b,0)/deltas.length;
+  value+=mean;predicted.push({month:year+'M'+String(m).padStart(2,'0'),value,forecast:true,sampleCount:deltas.length});
+  samples.push(deltas.length);
+ }
+ return {observed,predicted,samples,year,lastMonth,reason:null};
+}
+function forecastPanel(metric,sex){
+ const f=makeForecast(metric,sex),W=560,H=250,left=55,right=18,top=18,bottom=34;
+ if(!f.observed.length)return '<section class="panel"><h2>Prognos till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
+ const values=[...f.observed,...f.predicted].map(r=>r.value);
+ let min=Math.min(...values),max=Math.max(...values);
+ if(min===max){min-=1;max+=1}
+ const pad=(max-min)*.1;min-=pad;max+=pad;
+ const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
+ let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade och prognostiserade värden för '+f.year+'">';
+ for(let i=0;i<5;i++){const v=min+(max-min)*i/4,y=Y(v);out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e9edf2"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="#627389" font-size="12">'+fmt(Math.round(v))+'</text>'}
+ monthNames.forEach((name,i)=>out+='<text x="'+X(i+1)+'" y="'+(H-8)+'" text-anchor="middle" fill="#63748a" font-size="11">'+name+'</text>');
+ function draw(rows,forecast){
+  let prev=null;
+  for(const r of rows){
+   const m=+r.month.slice(-2),x=X(m),y=Y(r.value);
+   if(prev&&m===prev.m+1)out+='<line x1="'+prev.x+'" y1="'+prev.y+'" x2="'+x+'" y2="'+y+'" stroke="#005aa7" stroke-width="3.3"'+(forecast?' stroke-dasharray="6 5"':'')+'/>';
+   const label=metric+', '+$('sex').selectedOptions[0].text+', '+r.month+', '+fmt(Math.round(r.value))+(forecast&&r.forecast?', prognos':'');
+   const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+r.month+'\\n'+fmt(Math.round(r.value))+' personer'+(r.forecast?'\\nPrognos; historiska förändringar: '+r.sampleCount+' år':'')+(r.derived?'\\nBeräknat från män + kvinnor':'');
+   out+='<circle cx="'+x+'" cy="'+y+'" r="3.8" fill="'+(r.forecast?'#fff':'#005aa7')+'" stroke="#005aa7" stroke-width="2" pointer-events="none"/>';
+   out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(label)+'" data-tip="'+safeAttr(detail)+'" cx="'+x+'" cy="'+y+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(label)+'</title></circle>';
+   prev={m,x,y};
+  }
+ }
+ draw(f.observed,false);
+ if(f.predicted.length)draw([f.observed[f.observed.length-1],...f.predicted],true);
+ out+='</svg>';
+ const count=f.samples.length?Math.min(...f.samples):0;
+ const note=f.reason?f.reason:f.predicted.length?'Från '+monthNames[f.lastMonth-1]+' till december. Medelförändring för motsvarande kalendermånader '+(f.year-5)+'–'+(f.year-1)+'. Minst '+count+' historiska år per prognossteg.':'Hela året är publicerat; ingen prognos behövs.';
+ return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Endast innevarande år · valt statistikmått</p>'+out+'<div class="forecast-key"><span><i></i>Observerat</span><span><i class="predicted"></i>Prognos</span></div><p class="forecast-note">'+safeAttr(note)+'</p><div class="chart-tooltip" role="status" hidden></div></section>';
+}
 function panel(metric,sex,mode,title,description){
  const data=transformSeries(getData(metric,sex),mode);
  return '<section class="panel"><h2>'+title+'</h2><p>'+description+'</p>'+lineSVG(data,metric,sex,mode)+'<div class="chart-tooltip" role="status" hidden></div></section>';
@@ -219,11 +265,10 @@ function render(){
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
  +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+(latest?.derived?' · beräknat':'')+'</small></div>'
  +'<div class="card"><small>År som jämförs</small><b>'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+'</b><small>Senaste fem hela åren + innevarande</small></div>';
- const statusPanel=$('status').closest('.status-panel').outerHTML;
- $('charts').innerHTML=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
+$('charts').innerHTML=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
  +panel(metric,sex,'january','Utveckling från januari','Januari = 0 varje år; skillnaden från januari visas för varje månad.')
  +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.')
- +statusPanel;
+ +forecastPanel(metric,sex);
  $('updated').textContent='Senaste tillgängliga SCB-period: '+latestMonth+(getData(metric,sex).some(r=>r.derived)?' · beräknad total förekommer':'');
 }
 async function init(){try{

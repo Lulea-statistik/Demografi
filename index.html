@@ -230,7 +230,7 @@ function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=1
    if(negative)out+='<polyline points="'+points+'" fill="none" stroke="#b7434b" stroke-width="'+width+'" stroke-opacity="'+opacity+'" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#negative-'+mode+')"/>';
  }
  coordinates.forEach(p=>{
- const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+p[2].month+'\\n'+fmt(p[2].value)+' personer'+(p[2].derived?'\\nBeräknat från män + kvinnor (CKM)':'');
+ const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+p[2].month+'\\n'+fmt(p[2].value)+' personer'+(sex==='total'&&p[2].derived?'\\nMän + kvinnor':'');
  const accessible=metric+', '+$('sex').selectedOptions[0].text+', '+p[2].month+', '+fmt(p[2].value);
  out+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(year===latestYear?3.3:2.2)+'" fill="'+(negative&&p[2].value<0?'#b7434b':color)+'" pointer-events="none"/>';
  out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(accessible)+'" data-tip="'+safeAttr(detail)+'" cx="'+p[0]+'" cy="'+p[1]+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(accessible)+'</title></circle>';

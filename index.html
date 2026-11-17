@@ -47,13 +47,13 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 <main>
 <div class="filters">
 <label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label>
-<label>Ytterligare förändringsmått <select id="metric"><option value="">Läser SCB:s mått …</option></select></label>
+<label>Statistikmått <select id="metric"><option value="">Läser SCB:s mått …</option></select></label>
 <span id="updated" class="info"></span>
 </div>
 <div id="status" class="status" role="status">Hämtar officiell månadsstatistik från SCB …</div>
 <div id="cards" class="cards"></div>
 <div id="charts" class="grid"></div>
-<footer><strong>Källa:</strong> Statistiska centralbyrån (SCB), tabellerna <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/ManadBefStatRegion/">ManadBefStatRegion</a> (till 2024) och <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">MBefStatRegionCKM</a> (från 2025). Från 2025 tillför SCB kontrollerad slumpmässig osäkerhet för sekretesskydd. Därför kan totaler avvika från summan av delarna. Publicerade månader kan saknas; inga framtida månader ersätts med noll. Befolkningsförändringar kan hänföras till januari när exakt månad är okänd.</footer>
+<footer><strong>Källa:</strong> Statistiska centralbyrån (SCB), tabellerna <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/ManadBefStatRegion/">ManadBefStatRegion</a> (till 2024) och <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">MBefStatRegionCKM</a> (från 2025). Från 2025 tillför SCB kontrollerad slumpmässig osäkerhet för sekretesskydd. Om officiell folkmängd för Totalt saknas beräknas den som män + kvinnor och markeras som beräknad. Därför kan totaler avvika från summan av delarna. Publicerade månader kan saknas; inga framtida månader ersätts med noll. Befolkningsförändringar kan hänföras till januari när exakt månad är okänd.</footer>
 </main>
 <script>
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
@@ -116,27 +116,39 @@ function canonicalMeasure(name){
  return String(name||'').toLocaleLowerCase('sv-SE').normalize('NFC').replace(/\s+/g,' ').trim()
   .replace(/^folkmängd$/,'befolkning');
 }
+function observedData(metric,sex){
+ const rows=all.filter(r=>canonicalMeasure(r.measure)===canonicalMeasure(metric)&&sexClass(r.sex)===sex&&r.measureCode),map=new Map();
+ for(const r of rows){if(!map.has(r.month))map.set(r.month,r);else if(map.get(r.month)?.value!==r.value)map.set(r.month,null)}
+ return [...map.values()].filter(Boolean).sort((a,b)=>a.month.localeCompare(b.month));
+}
 function getData(metric,sex){
- const target=canonicalMeasure(metric);
- const rows=all.filter(r=>canonicalMeasure(r.measure)===target&&sexClass(r.sex)===sex&&r.measureCode);
- const byPeriod=new Map();
- for(const r of rows){
-  const key=r.month;
-  if(!byPeriod.has(key))byPeriod.set(key,r);
-  else if(byPeriod.get(key) && byPeriod.get(key).value!==r.value){
-   console.warn('Motstridiga SCB-värden för mått/kön/månad:',metric,sex,key);
-   byPeriod.set(key,null);
-  }
+ const official=observedData(metric,sex);
+ if(sex!=='total'||canonicalMeasure(metric)!=='befolkning')return official;
+ const result=new Map(official.map(r=>[r.month,r]));
+ const men=new Map(observedData(metric,'men').map(r=>[r.month,r]));
+ for(const female of observedData(metric,'women')){
+  const male=men.get(female.month);
+  if(!result.has(female.month)&&male)result.set(female.month,{...female,value:male.value+female.value,sex:'Totalt',derived:true});
  }
- return [...byPeriod.values()].filter(Boolean).sort((a,b)=>a.month.localeCompare(b.month));
+ return [...result.values()].sort((a,b)=>a.month.localeCompare(b.month));
+}
+function transformSeries(data,mode){
+ const rows=[...data].sort((a,b)=>a.month.localeCompare(b.month)),map=new Map(rows.map(r=>[r.month,r]));
+ if(mode==='level')return rows;
+ return rows.flatMap(r=>{
+  const y=Number(r.month.slice(0,4)),m=Number(r.month.slice(-2));
+  const base=mode==='january'?y+'M01':m===1?(y-1)+'M12':y+'M'+String(m-1).padStart(2,'0');
+  const previous=map.get(base);
+  return previous?[{...r,value:r.value-previous.value,derived:r.derived||previous.derived}]:[];
+ });
 }
 const monthNames=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
 function safeAttr(text){return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
-function lineSVG(data,metric,sex){const W=560,H=250, left=55,right=18,top=18,bottom=34;
+function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=18,bottom=34;
  let years=[...new Set(data.map(r=>Number(r.month.slice(0,4))))].sort(), values=data.map(r=>r.value);
  if(!values.length)return '<div class="info">Ingen publicerad statistik för detta mått.</div>';
- let min=Math.min(...values),max=Math.max(...values);if(min===max){min-=1;max+=1}let pad=(max-min)*0.08;min-=pad;max+=pad;
+ let min=Math.min(...values),max=Math.max(...values);if(mode!=='level'){min=Math.min(min,0);max=Math.max(max,0)}if(min===max){min-=1;max+=1}let pad=(max-min)*0.08;min-=pad;max+=pad;
  const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
  let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Månadsutveckling per år">';
  for(let i=0;i<5;i++){let v=min+(max-min)*i/4,y=Y(v);out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="#e9edf2"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end" fill="#627389" font-size="12">'+fmt(Math.round(v))+'</text>'}
@@ -145,27 +157,28 @@ function lineSVG(data,metric,sex){const W=560,H=250, left=55,right=18,top=18,bot
  let unique=new Map(pts.map(r=>[r.month,r]));let coordinates=[...unique.values()].map(r=>[X(Number(r.month.slice(-2))),Y(r.value),r]);if(!coordinates.length)return;
  out+='<polyline points="'+coordinates.map(p=>p[0]+','+p[1]).join(' ')+'" fill="none" stroke="'+color+'" stroke-width="'+(year===latestYear?4:2)+'" stroke-opacity="'+(year===latestYear?1:.55)+'" stroke-linecap="round" stroke-linejoin="round"/>';
  coordinates.forEach(p=>{
- const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+p[2].month+'\\n'+fmt(p[2].value)+' personer';
+ const detail=metric+'\\n'+$('sex').selectedOptions[0].text+' · '+p[2].month+'\\n'+fmt(p[2].value)+' personer'+(p[2].derived?'\\nBeräknat: män + kvinnor (CKM)':'');
  const accessible=metric+', '+$('sex').selectedOptions[0].text+', '+p[2].month+', '+fmt(p[2].value);
  out+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(year===latestYear?3.3:2.2)+'" fill="'+color+'" pointer-events="none"/>';
  out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(accessible)+'" data-tip="'+safeAttr(detail)+'" cx="'+p[0]+'" cy="'+p[1]+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(accessible)+'</title></circle>';
 });
  });return out+'</svg><div class="legend">'+years.map((y,i)=>{let color=y===latestYear?'#1065b3':y===latestYear-1?'#173e66':['#aab3c2','#8899ad','#697d94','#bec7d2','#93a8bb'][i%5];return '<span><i class="swatch" style="background:'+color+';opacity:'+(y===latestYear?1:.55)+'"></i>'+y+'</span>'}).join('')+'</div>'}
-function panel(metric,sex,wide=false){if(!metric)return '';let data=getData(metric,sex);
- return '<section class="panel '+(wide?'wide':'')+'"><h2>'+metric+'</h2><p>Månadsvis jämförelse per kalenderår · antal</p>'+lineSVG(data,metric,sex)+'<div class="chart-tooltip" role="status" hidden></div></section>'}
-function render(){if(!all.length)return;
- let sex=$('sex').value, priority=[roleMatch(['folkmängd']),roleMatch(['folkökning']),roleMatch(['födda']),roleMatch(['döda']),roleMatch(['inflyttade']),roleMatch(['utflyttade'])].filter(Boolean);
- let extra=$('metric').value, seen=new Set(), display=[...priority,extra].filter(m=>m&&!seen.has(canonicalMeasure(m))&&seen.add(canonicalMeasure(m)));
- let populationMeasure=measures.find(m=>canonicalMeasure(m)==='befolkning')||priority[0]||'';let pop=getData(populationMeasure,sex).sort((a,b)=>a.month.localeCompare(b.month));
- let latestMonth=all.map(r=>r.month).sort().at(-1),latest=pop.filter(r=>r.month===latestMonth).at(-1);
+function panel(metric,sex,mode,title,description){
+ const data=transformSeries(getData(metric,sex),mode);
+ return '<section class="panel wide"><h2>'+title+'</h2><p>'+description+'</p>'+lineSVG(data,metric,sex,mode)+'<div class="chart-tooltip" role="status" hidden></div></section>';
+}
+function render(){
+ if(!all.length)return;
+ const sex=$('sex').value,metric=$('metric').value;
+ const population=measures.find(m=>canonicalMeasure(m)==='befolkning');
+ const pop=getData(population||'',sex),latestMonth=all.map(r=>r.month).sort().at(-1),latest=pop.find(r=>r.month===latestMonth);
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
- +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+'</small></div>'
+ +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+(latest?.derived?' · beräknat':'')+'</small></div>'
  +'<div class="card"><small>År som jämförs</small><b>'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+'</b><small>Senaste fem hela åren + innevarande</small></div>';
- const newerMeasures=measures.filter(m=>!priority.includes(m)&&!display.includes(m)&&all.some(r=>r.measure===m&&Number(r.month.slice(0,4))>=2025)&&!all.some(r=>canonicalMeasure(r.measure)===canonicalMeasure(m)&&Number(r.month.slice(0,4))<2025));
- $('charts').innerHTML=display.map(m=>panel(m,sex,m===extra&&!priority.includes(m))).join('')
- +(newerMeasures.length?'<section class="wide"><h2>Nya statistikserier från 2025</h2><p class="info">Mått som saknas i den äldre tabellen. Ingen historik före 2025 antas.</p></section>'+newerMeasures.map(m=>panel(m,sex)).join(''):'');
-
- $('updated').textContent='Senaste tillgängliga SCB-period: '+latestMonth;
+ $('charts').innerHTML=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
+ +panel(metric,sex,'january','Utveckling från januari','Januari = 0 varje år; skillnaden från januari visas för varje månad.')
+ +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.');
+ $('updated').textContent='Senaste tillgängliga SCB-period: '+latestMonth+(getData(metric,sex).some(r=>r.derived)?' · beräknad total förekommer':'');
 }
 async function init(){try{
  const results=await Promise.allSettled(TABLES.map(getTable));let failures=results.filter(r=>r.status==='rejected');
@@ -174,8 +187,8 @@ async function init(){try{
  latestYear=Math.max(...all.map(r=>Number(r.month.slice(0,4))));
  let newest=latestYear-5;all=all.filter(r=>Number(r.month.slice(0,4))>=newest && r.measure && ['total','men','women'].includes(sexClass(r.sex)));
  measures=[...new Set(all.map(r=>r.measure).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'sv'));
- let priority=[roleMatch(['folkmängd']),roleMatch(['folkökning']),roleMatch(['födda']),roleMatch(['döda']),roleMatch(['inflyttade']),roleMatch(['utflyttade'])];
- $('metric').innerHTML='<option value="">Välj ett ytterligare mått</option>'+measures.filter(m=>!priority.includes(m)).map(m=>'<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>').join('');
+ const population=measures.find(m=>canonicalMeasure(m)==='befolkning')||measures[0]||'';
+ $('metric').innerHTML=measures.map(m=>'<option value="'+safeAttr(m)+'"'+(m===population?' selected':'')+'>'+safeAttr(m)+'</option>').join('');
  $('status').textContent=failures.length?'Varning: en SCB-tabell kunde inte hämtas. Visar tillgänglig delserie.':'Data hämtade från SCB:s officiella statistikdatabas.';
  $('status').className='status'+(failures.length?' error':'');
  render();

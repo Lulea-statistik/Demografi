@@ -27,6 +27,9 @@ select:focus-visible,.data-point:focus-visible{outline:3px solid var(--focus);ou
 .card{border-top:4px solid var(--accent)}
 .card small{color:var(--muted);font-size:.82rem}
 .card b{font-size:1.65rem;display:block;margin:7px 0;color:var(--accent-dark)}
+.card .year-card-detail{display:block;font-size:.82rem;color:var(--muted);margin:7px 0 2px}
+.card .year-card-period{display:block;font-size:1.65rem;font-weight:750;color:var(--accent-dark);line-height:1.25;margin:5px 0}
+.card .year-card-meta{display:block;font-size:.82rem;color:var(--muted);margin-top:5px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .panel{position:relative;min-width:0}
 .panel h2{font-size:1.22rem;margin:0 0 4px}
@@ -76,7 +79,6 @@ body.focus-open{overflow:hidden}
 <div class="filters">
 <label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label>
 <label>Statistikmått <select id="metric"><option value="">Läser SCB:s mått …</option></select></label>
-<span id="updated" class="info"></span>
 </div>
 <p id="status" class="status" role="status">Hämtar officiell månadsstatistik från SCB …</p>
 <div id="cards" class="cards"></div>
@@ -393,13 +395,12 @@ function render(){
  const pop=getData(population||'',sex),latestMonth=all.map(r=>r.month).sort().at(-1),latest=pop.find(r=>r.month===latestMonth);
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
  +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+(latest?.derived?' · beräknat':'')+'</small></div>'
- +'<div class="card"><small>År som jämförs</small><b>'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+'</b><small>Senaste fem hela åren + innevarande</small></div>';
+ +'<div class="card"><small>År som jämförs</small><span class="year-card-detail">'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+' · Senaste fem hela åren + innevarande</span><span class="year-card-meta">Senaste tillgängliga SCB-period:</span><strong class="year-card-period">'+readablePeriod(latestMonth)+'</strong></div>';
 const chartsMarkup=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
  +panel(metric,sex,'january','Utveckling från januari','Januari = 0 varje år; skillnaden från januari visas för varje månad.')
  +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.')
  +forecastPanel(metric,sex);
  $('charts').innerHTML=chartsMarkup.replaceAll('<section class="panel">','<section class="panel"><button type="button" class="focus-button" data-focus-toggle aria-label="Öppna diagram i fokusläge" aria-pressed="false" title="Öppna diagram i fokusläge">⛶ Fokus</button>');
- $('updated').textContent='Senaste tillgängliga SCB-period: '+readablePeriod(latestMonth);
 }
 async function init(){try{
  const results=await Promise.allSettled(TABLES.map(getTable));let failures=results.filter(r=>r.status==='rejected');

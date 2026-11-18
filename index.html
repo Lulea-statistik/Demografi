@@ -30,6 +30,11 @@ select:focus-visible,.data-point:focus-visible{outline:3px solid var(--focus);ou
 .card .year-card-detail{display:block;font-size:.82rem;color:var(--muted);margin:7px 0 2px}
 .card .year-card-period{display:block;font-size:1.65rem;font-weight:750;color:var(--accent-dark);line-height:1.25;margin:5px 0}
 .card .year-card-meta{display:block;font-size:.82rem;color:var(--muted);margin-top:5px}
+.card .next-release{display:block;margin-top:11px;padding-top:9px;border-top:1px solid var(--line)}
+.card .next-release strong{display:block;font-size:1.12rem;line-height:1.35;color:var(--accent-dark);margin-top:3px}
+.card .next-release small{display:block;margin:3px 0}
+.card .next-release a{font-size:.82rem}
+
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .panel{position:relative;min-width:0}
 .panel h2{font-size:1.22rem;margin:0 0 4px}
@@ -90,6 +95,7 @@ body.focus-open{overflow:hidden}
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
 const TABLES=[{id:'TAB1625',start:2021,end:2024},{id:'TAB6473',start:2025,end:9999}];
 let all=[], measures=[], latestYear=0, measureCatalog=[], forecastView='monthly';
+let publicationSchedule=null;
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:0});
 function items(v){return (v.values||v.valueCodes||[]).map((x,i)=>typeof x==='object'?{code:String(x.code??x.value??i),text:String(x.text??x.label??x.code??i)}:{code:String(x),text:String((v.valueTexts||v.valueText||[])[i]??x)});}
 function variable(meta,words){let vars=meta.variables||meta.Variables||[];return vars.find(v=>words.some(w=>String(v.text||v.label||v.code).toLowerCase().includes(w)))}
@@ -388,6 +394,31 @@ function panel(metric,sex,mode,title,description){
  const data=transformSeries(getData(metric,sex),mode);
  return '<section class="panel"><h2>'+title+'</h2><p>'+description+'</p>'+lineSVG(data,metric,sex,mode)+'<div class="chart-tooltip" role="status" hidden></div></section>';
 }
+function nextPublicationHTML(latestMonth){
+ const link='https://www.scb.se/hitta-statistik/publiceringskalendern/?period=Forward6Months&prodKod=BE0101';
+ const events=publicationSchedule?.releases||[];
+ const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Stockholm'}); // YYYY-MM-DD
+ const pending=events.filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&e.date>=today&&
+  /^\d{4}M(0[1-9]|1[0-2])$/.test(e.period)&&e.period>latestMonth)
+  .sort((a,b)=>a.date.localeCompare(b.date)||a.period.localeCompare(b.period));
+ if(!pending.length)return '<span class="next-release"><small>Nästa månadsuppdatering</small><small>Inget kommande datum är bekräftat i den senast hämtade kalendern.</small><a href="'+link+'" target="_blank" rel="noopener noreferrer">SCB:s publiceringskalender</a></span>';
+ const next=pending[0];
+ const dateParts=next.date.split('-');
+ const dateLabel=Number(dateParts[2])+' '+fullMonthNames[Number(dateParts[1])-1].toLowerCase()+' '+dateParts[0];
+ return '<span class="next-release"><small>Nästa planerade månadsuppdatering</small><strong>'+dateLabel+'</strong>'+
+  '<small>Avser '+readablePeriod(next.period).toLowerCase()+' · normalt kl. 08.00</small>'+
+  '<a href="'+link+'" target="_blank" rel="noopener noreferrer">Källa: SCB:s publiceringskalender</a></span>';
+}
+async function loadPublicationSchedule(){
+ try{
+  const response=await fetch('scb_publications.json?cache='+Date.now(),{cache:'no-store'});
+  if(!response.ok)throw Error('Kalenderfil saknas');
+  const result=await response.json();
+  if(!Array.isArray(result.releases))throw Error('Ogiltig kalenderfil');
+  publicationSchedule=result;
+ }catch(error){publicationSchedule={releases:[]};}
+ if(all.length)render();
+}
 function render(){
  if(!all.length)return;
  const sex=$('sex').value,metric=$('metric').value;
@@ -395,7 +426,7 @@ function render(){
  const pop=getData(population||'',sex),latestMonth=all.map(r=>r.month).sort().at(-1),latest=pop.find(r=>r.month===latestMonth);
  $('cards').innerHTML='<div class="card"><small>Senast publicerade månad</small><b>'+latestMonth+'</b><small>SCB månadsstatistik</small></div>'
  +'<div class="card"><small>Folkmängd vid månadsslut</small><b>'+(latest?fmt(latest.value):'–')+'</b><small>'+latestMonth+' · '+$('sex').selectedOptions[0].text+(latest?.derived?' · beräknat':'')+'</small></div>'
- +'<div class="card"><small>År som jämförs</small><span class="year-card-detail">'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+' · Senaste fem hela åren + innevarande</span><span class="year-card-meta">Senaste tillgängliga SCB-period:</span><strong class="year-card-period">'+readablePeriod(latestMonth)+'</strong></div>';
+ +'<div class="card"><small>År som jämförs</small><span class="year-card-detail">'+[...new Set(all.map(r=>r.month.slice(0,4)))].length+' · Senaste fem hela åren + innevarande</span><span class="year-card-meta">Senaste tillgängliga SCB-period:</span><strong class="year-card-period">'+readablePeriod(latestMonth)+'</strong>'+nextPublicationHTML(latestMonth)+'</div>';
 const chartsMarkup=panel(metric,sex,'level','Månadsutveckling','Värde för respektive månad.')
  +panel(metric,sex,'january','Utveckling från januari','Januari = 0 varje år; skillnaden från januari visas för varje månad.')
  +panel(metric,sex,'monthly','Förändring från föregående månad','Skillnaden mot föregående kalendermånad, inklusive december–januari när data finns.')
@@ -479,5 +510,5 @@ for(const root of [$('charts'),$('chart-focus')]){
   if(previousFocus>=0)openFocus(previousFocus);
  });
 }
-$('sex').addEventListener('change',render);$('metric').addEventListener('change',render);init();
+$('sex').addEventListener('change',render);$('metric').addEventListener('change',render);loadPublicationSchedule();init();
 </script></body></html>

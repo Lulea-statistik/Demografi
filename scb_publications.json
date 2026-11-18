@@ -1,10 +1,54 @@
 {
-  "source": "https://www.scb.se/hitta-statistik/publiceringskalendern/?period=Forward6Months&prodKod=BE0101",
+  "source": "https://www.scb.se/hitta-statistik/publiceringskalendern/?period=Forward1Year&prodKod=BE0101",
   "checked_on": "2026-11-18",
   "releases": [
     {
       "date": "2026-12-07",
       "period": "2026M10"
+    },
+    {
+      "date": "2027-01-13",
+      "period": "2026M11"
+    },
+    {
+      "date": "2027-02-23",
+      "period": "2026M12"
+    },
+    {
+      "date": "2027-03-08",
+      "period": "2027M01"
+    },
+    {
+      "date": "2027-04-07",
+      "period": "2027M02"
+    },
+    {
+      "date": "2027-05-12",
+      "period": "2027M03"
+    },
+    {
+      "date": "2027-06-07",
+      "period": "2027M04"
+    },
+    {
+      "date": "2027-07-07",
+      "period": "2027M05"
+    },
+    {
+      "date": "2027-08-20",
+      "period": "2027M06"
+    },
+    {
+      "date": "2027-09-07",
+      "period": "2027M07"
+    },
+    {
+      "date": "2027-10-07",
+      "period": "2027M08"
+    },
+    {
+      "date": "2027-11-10",
+      "period": "2027M09"
     }
   ]
 }

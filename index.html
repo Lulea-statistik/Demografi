@@ -93,6 +93,7 @@ const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
 const TABLES=[{id:'TAB1625',start:2021,end:2024},{id:'TAB6473',start:2025,end:9999}];
 let all=[], measures=[], latestYear=0, measureCatalog=[], forecastView='monthly';
 let publicationSchedule=null;
+let scbStatusWatcher=null,scbRefreshPending=false;
 const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:0});
 function items(v){return (v.values||v.valueCodes||[]).map((x,i)=>typeof x==='object'?{code:String(x.code??x.value??i),text:String(x.text??x.label??x.code??i)}:{code:String(x),text:String((v.valueTexts||v.valueText||[])[i]??x)});}
 function variable(meta,words){let vars=meta.variables||meta.Variables||[];return vars.find(v=>words.some(w=>String(v.text||v.label||v.code).toLowerCase().includes(w)))}
@@ -418,6 +419,34 @@ async function loadPublicationSchedule(){
   publicationSchedule=result;
  }catch(error){publicationSchedule={releases:[]};}
  if(all.length)render();
+ startScbReleaseWatch();
+}
+function swedishNow(){
+ return new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Stockholm',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date())
+ .reduce((acc,part)=>(acc[part.type]=part.value,acc),{});
+}
+async function checkPublishedScbPeriod(){
+ if(scbRefreshPending||!all.length||document.hidden)return;
+ const now=swedishNow(),date=now.year+'-'+now.month+'-'+now.day;
+ const minutes=Number(now.hour)*60+Number(now.minute);
+ if(minutes<8*60||minutes>11*60+30)return;
+ if(!publicationSchedule?.releases?.some(item=>item.date===date))return;
+ try{
+  const response=await fetch('scb_data_status.json?cache='+Date.now(),{cache:'no-store'});
+  if(!response.ok)return;
+  const status=await response.json();
+  const newest=all.map(item=>item.month).sort().at(-1);
+  if(!/^\d{4}M(0[1-9]|1[0-2])$/.test(status.latest_period||'')||status.latest_period<=newest)return;
+  scbRefreshPending=true;
+  if(focusedPanel)closeFocus();
+  await init();
+ }catch(error){console.warn('Kunde inte kontrollera ny SCB-period:',error)}
+ finally{scbRefreshPending=false}
+}
+function startScbReleaseWatch(){
+ if(scbStatusWatcher!==null)return;
+ checkPublishedScbPeriod();
+ scbStatusWatcher=setInterval(checkPublishedScbPeriod,120000);
 }
 function render(){
  if(!all.length)return;
@@ -441,6 +470,7 @@ const chartsMarkup=panel(metric,sex,'level','Månadsutveckling','Värde för res
  $('charts').innerHTML=chartsMarkup.replaceAll('<section class="panel">','<section class="panel"><button type="button" class="focus-button" data-focus-toggle aria-label="Öppna diagram i fokusläge" aria-pressed="false" title="Öppna diagram i fokusläge">⛶ Fokus</button>');
 }
 async function init(){try{
+ const selectedMetric=$('metric').value;
  const results=await Promise.allSettled(TABLES.map(getTable));let failures=results.filter(r=>r.status==='rejected');
  all=results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value);
  if(!all.length)throw Error(failures.map(r=>r.reason.message).join('; '));
@@ -448,7 +478,8 @@ async function init(){try{
  let newest=latestYear-5;all=all.filter(r=>Number(r.month.slice(0,4))>=newest && r.measure && ['total','men','women'].includes(sexClass(r.sex)));
  measures=[...new Set(all.map(r=>r.measure).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'sv'));
  const population=measures.find(m=>canonicalMeasure(m)==='befolkning')||measures[0]||'';
- $('metric').innerHTML=measures.map(m=>'<option value="'+safeAttr(m)+'"'+(m===population?' selected':'')+'>'+safeAttr(m)+'</option>').join('');
+ const activeMetric=measures.includes(selectedMetric)?selectedMetric:population;
+ $('metric').innerHTML=measures.map(m=>'<option value="'+safeAttr(m)+'"'+(m===activeMetric?' selected':'')+'>'+safeAttr(m)+'</option>').join('');
  $('status').textContent=failures.length?'Varning: en SCB-tabell kunde inte hämtas. Visar tillgänglig delserie.':'Data hämtade från SCB:s officiella statistikdatabas.';
  $('status').className='status'+(failures.length?' error':'');
  render();

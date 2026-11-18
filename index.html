@@ -494,6 +494,13 @@ function closeFocus(){
  button?.focus();
 }
 $('chart-focus').addEventListener('cancel',event=>{event.preventDefault();closeFocus()});
+$('chart-focus').addEventListener('click',event=>{
+ // Klick på dialogens backdrop träffar dialogelementet; klick i innehållet gör det inte.
+ if(event.target!==event.currentTarget)return;
+ const box=event.currentTarget.getBoundingClientRect();
+ if(event.clientX<box.left||event.clientX>box.right||
+    event.clientY<box.top||event.clientY>box.bottom)closeFocus();
+});
 for(const root of [$('charts'),$('chart-focus')]){
  root.addEventListener('pointerover',event=>{const p=event.target.closest?.('.data-point');if(p)showHover(p)});
  root.addEventListener('pointerout',event=>{const p=event.target.closest?.('.data-point');if(p)hideHover(p)});

@@ -436,7 +436,7 @@ async function checkPublishedScbPeriod(){
   if(!response.ok)return;
   const status=await response.json();
   const newest=all.map(item=>item.month).sort().at(-1);
-  if(!/^\\d{4}M(0[1-9]|1[0-2])$/.test(status.latest_period||'')||status.latest_period<=newest)return;
+  if(!/^\d{4}M(0[1-9]|1[0-2])$/.test(status.latest_period||'')||status.latest_period<=newest)return;
   scbRefreshPending=true;
   if(focusedPanel)closeFocus();
   await init();

@@ -256,6 +256,7 @@ function renderHits(){
  updateRows();
 
 }
+let topSort={key:'rank',direction:1};
 function renderTop(){
  const p=groups().find(p=>p.label===el('topPeriod').value),m=el('measure').value,relative=m!==population.code&&el('mode').value==='relative';
  if(!p){el('topTable').textContent='Ingen period tillgänglig.';return}
@@ -266,11 +267,15 @@ function renderTop(){
  const list=[...ref,pair].sort(sort),chosen=list.slice(0,10);
  for(const id of ['2580','pair'])if(!chosen.some(x=>x.id===id))chosen.push(list.find(x=>x.id===id));
  chosen.sort(sort);
- const table=el('topTable');const markup=items=>'<table style="width:100%;border-collapse:collapse;text-align:left"><thead><tr><th>Placering</th><th>Kommun / område</th><th style="text-align:right">Värde '+(relative?'per 1 000 invånare':'(personer)')+'</th></tr></thead><tbody>'+items.map(x=>'<tr style="border-top:1px solid var(--line);'+(x.id==='2580'?'color:#005aa7;font-weight:700':x.id==='pair'?'color:#c62828;font-weight:700':'')+'"><td style="padding:7px">'+rank(x.v)+'</td><td>'+esc(x.name)+'</td><td style="text-align:right">'+x.v.toLocaleString('sv-SE',{maximumFractionDigits:relative?2:0})+'</td></tr>').join('')+'</tbody></table>';
+ const table=el('topTable');
+ const order=items=>[...items].sort((a,b)=>{const cmp=topSort.key==='name'?a.name.localeCompare(b.name,'sv'):topSort.key==='value'?a.v-b.v:rank(a.v)-rank(b.v);return cmp*topSort.direction||sort(a,b)});
+ const heading=(key,label,style='')=>{const active=topSort.key===key;return '<th '+style+' aria-sort="'+(active?(topSort.direction===1?'ascending':'descending'):'none')+'"><button type="button" class="history-sort" data-top-sort="'+key+'">'+label+' <span aria-hidden="true">'+(active?(topSort.direction===1?'▲':'▼'):'↕')+'</span></button></th>'};
+ const markup=items=>'<table style="width:100%;border-collapse:collapse;text-align:left"><thead><tr>'+heading('rank','Placering')+heading('name','Kommun / område')+heading('value','Värde '+(relative?'per 1 000 invånare':'(personer)'),'style="text-align:right"')+'</tr></thead><tbody>'+order(items).map(x=>'<tr style="border-top:1px solid var(--line);'+(x.id==='2580'?'color:#005aa7;font-weight:700':x.id==='pair'?'color:#c62828;font-weight:700':'')+'"><td style="padding:7px">'+rank(x.v)+'</td><td>'+esc(x.name)+'</td><td style="text-align:right">'+x.v.toLocaleString('sv-SE',{maximumFractionDigits:relative?2:0})+'</td></tr>').join('')+'</tbody></table>';
  table.style.maxHeight='none';table.innerHTML=markup(chosen);
  const height=table.getBoundingClientRect().height;
  if(el('topAll').checked){table.innerHTML=markup(list);table.style.maxHeight=height>0?Math.ceil(height)+'px':'400px';}
  table.scrollTop=0;
+ for(const btn of table.querySelectorAll('[data-top-sort]'))btn.addEventListener('click',()=>{const key=btn.dataset.topSort;topSort={key,direction:topSort.key===key?-topSort.direction:key==='value'?-1:1};renderTop();table.querySelector('[data-top-sort="'+key+'"]')?.focus({preventScroll:true})});
 }
 el('topPeriod').addEventListener('change',renderTop);
 el('topAll').addEventListener('change',renderTop);

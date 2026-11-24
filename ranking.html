@@ -86,7 +86,7 @@ body.focus-open{overflow:hidden}
 <div class="filters"><label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label><label>Period <select id="period"><option value="month">Månad</option><option value="quarter">Kvartal</option></select></label><label>Statistikmått <select id="measure"></select></label><label>Jämförelse <select id="mode"><option value="absolute">Antal personer</option><option value="relative">Per 1 000 invånare</option></select></label></div>
 <p id="loading" role="status">Hämtar SCB:s statistik …</p><section class="panel"><div class="panel-heading"><h2 id="chartTitle">Ranking över tid</h2><button type="button" class="panel-toggle" aria-expanded="true" aria-controls="chartBody">− Minimera</button></div><div class="panel-content" id="chartBody"><p>Plats 1 = högsta värde. Luleå+Boden jämförs som ett extra område mot Sveriges 290 kommuner; Luleå och Boden finns kvar i referensen.</p><div id="chart"></div><div class="chart-tooltip" role="status" hidden></div><div class="legend"><span><i class="swatch" style="background:#005aa7"></i>Luleå (heldragen)</span><span><i class="swatch" style="height:0;border-top:3px dashed #c62828"></i>Luleå+Boden (streckad)</span><span>Färgintensitet: 100 % vid plats 1–10, 50 % vid plats 281–291 (oberoende av axelns utsnitt).</span></div></div></section>
 <section class="panel" style="margin-top:18px"><div class="panel-heading"><h2>Topp 10 samt Luleå och Luleå+Boden</h2><button type="button" class="panel-toggle" aria-expanded="true" aria-controls="topBody">− Minimera</button></div><div class="panel-content" id="topBody"><div class="filters"><label>Tabellperiod <select id="topPeriod"></select></label></div><p>De tio högsta värdena bland kommunerna och jämförelseområdet Luleå+Boden, plus de två fokusområdena om de saknas. Placeringarna följer diagrammets referens med 290 kommuner. Vid lika värden avgör kommunkod ordningen i tabellen.</p><div id="topTable" style="overflow:auto"></div></div></section><section class="panel is-collapsed" style="margin-top:18px"><div class="panel-heading"><h2>Värden och ranking över tid</h2><button type="button" class="panel-toggle" aria-expanded="false" aria-controls="historyBody">+ Expandera</button></div><div class="panel-content" id="historyBody" hidden><p id="historyNote"></p><div id="table" style="overflow:auto"></div></div></section>
-<footer><strong>Källa:</strong> <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">SCB MBefStatRegionCKM</a>, från januari 2025. Officiella totaler används om de finns, annars beräknas additiva personantal som män + kvinnor. Relativa värden använder folkmängden för valt kön. Kvartal summerar tre fullständiga månader; folkmängd avser kvartalets slut. Relativa flöden divideras med folkmängden vid föregående periods slut (januari 2025 och första kvartalet 2025 saknar därför relativt värde). Luleå+Boden summeras före rangordning. Vid lika värde delas placering: 1 + antalet kommuner med strikt högre värde. Jämförelseområdet kan därmed få plats 291. CKM-osäkerhet kan påverka placeringar och förstärkas vid summering. Höga värden för döda eller utflyttade är inte nödvändigtvis positiva.</footer></main>
+<section class="panel is-collapsed" style="margin-top:18px"><div class="panel-heading"><h2>När Luleå är topp 10 <span id="hitsCount" class="info"></span></h2><button type="button" class="panel-toggle" aria-expanded="false" aria-controls="hitsBody">+ Expandera</button></div><div class="panel-content" id="hitsBody" hidden><p>Alla tillfällen då Luleå kommun (inte Luleå+Boden) har plats 1–10 bland Sveriges 290 kommuner. Samtliga publicerade månader och hela kvartal, kön och jämförelseformer genomsöks oberoende av sidans filter. Hög ranking betyder högsta värde, inte alltid önskvärd utveckling. Delade placeringar inkluderas. Jämförelser med ofullständiga data utelämnas.</p><p id="hitsStatus" role="status"></p><div id="hitsTable" style="overflow:auto"></div></div></section><footer><strong>Källa:</strong> <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">SCB MBefStatRegionCKM</a>, från januari 2025. Officiella totaler används om de finns, annars beräknas additiva personantal som män + kvinnor. Relativa värden använder folkmängden för valt kön. Kvartal summerar tre fullständiga månader; folkmängd avser kvartalets slut. Relativa flöden divideras med folkmängden vid föregående periods slut (januari 2025 och första kvartalet 2025 saknar därför relativt värde). Luleå+Boden summeras före rangordning. Vid lika värde delas placering: 1 + antalet kommuner med strikt högre värde. Jämförelseområdet kan därmed få plats 291. CKM-osäkerhet kan påverka placeringar och förstärkas vid summering. Höga värden för döda eller utflyttade är inte nödvändigtvis positiva.</footer></main>
 <script>
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
 const TABLES=[{id:'TAB1625',start:2021,end:2024},{id:'TAB6473',start:2025,end:9999}];
@@ -148,24 +148,24 @@ async function fetchRanking(){
 function applyData(data){
  const {regions,entries}=data;window.regionNames=data.regionNames||{};months=data.months;metrics=data.metrics;population=data.population;map.clear();for(const [k,v] of entries)map.set(k,v);
  el('measure').replaceChildren(...metrics.map(m=>new Option(m.label,m.code)));el('measure').value=metrics.find(m=>/^folkökning$/i.test(m.label))?.code||metrics[0].code;
- window.regions=regions;el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1)+' · Totalt: officiell total där tillgänglig, annars män + kvinnor för personantal.';render();
+ window.regions=regions;hits=null;el('hitsCount').textContent='';if(!el('hitsBody').hidden)calculateHits();el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1)+' · Totalt: officiell total där tillgänglig, annars män + kvinnor för personantal.';render();
 }
 async function load(){try{const res=await fetch('data/ranking.json',{cache:'no-cache'});if(!res.ok)throw Error('Cache saknas');const data=await res.json();if(data.regions.length!==290||!data.entries.length)throw Error('Ogiltig cache');applyData(data);if(!data.regionNames){try{const meta=await (await retryFetch(BASE+'TAB6473/metadata?lang=sv')).json(),reg=matchVar(metaDimensions(meta),/region/i);window.regionNames=Object.fromEntries(reg.values.map((c,i)=>[c,reg.valueTexts[i]]));render()}catch(e){/* Codes remain visible if names cannot be fetched. */}}el('loading').textContent+=' · Mellanlagrad '+data.updated;}catch(e){el('loading').textContent='Mellanlagrad data saknas; hämtar SCB i mindre grupper …';applyData(await fetchRanking());}}
 function previous(m){let y=+m.slice(0,4),n=+m.slice(-2);return n===1?(y-1)+'M12':y+'M'+String(n-1).padStart(2,'0')}
-function groups(){if(el('period').value==='month')return months.map(m=>({label:m,months:[m]}));let q=new Map();for(const m of months){let k=m.slice(0,4)+'K'+Math.ceil(+m.slice(-2)/3);if(!q.has(k))q.set(k,[]);q.get(k).push(m)}return [...q].filter(([k,v])=>v.length===3).map(([label,months])=>({label,months}))}
-function cell(c,m,t){
- const sex=el('sex').value, get=k=>map.get([c,m,t,k].join('|'));
+function groups(periodType=el('period').value){if(periodType==='month')return months.map(m=>({label:m,months:[m]}));let q=new Map();for(const m of months){let k=m.slice(0,4)+'K'+Math.ceil(+m.slice(-2)/3);if(!q.has(k))q.set(k,[]);q.get(k).push(m)}return [...q].filter(([k,v])=>v.length===3).map(([label,months])=>({label,months}))}
+function cell(c,m,t,sex=el('sex').value){
+ const get=k=>map.get([c,m,t,k].join('|'));
  const direct=get(sex);if(Number.isFinite(direct))return direct;
  if(sex!=='total')return undefined;
  const label=metrics.find(x=>x.code===m)?.label||'';
  if(/andel|procent|kvot|medel|per |promille/i.test(label))return undefined;
  const a=get('men'),b=get('women');return Number.isFinite(a)&&Number.isFinite(b)?a+b:undefined;
 }
-function value(codes,m,period,relative){
+function value(codes,m,period,relative,sex=el('sex').value){
  const stock=m===population.code, selected=stock?period.slice(-1):period;
- let values=codes.flatMap(c=>selected.map(t=>cell(c,m,t)));if(values.some(v=>!Number.isFinite(v)))return null;let sum=values.reduce((a,b)=>a+b,0);
+ let values=codes.flatMap(c=>selected.map(t=>cell(c,m,t,sex)));if(values.some(v=>!Number.isFinite(v)))return null;let sum=values.reduce((a,b)=>a+b,0);
  if(!relative||stock)return sum;
- let base=codes.map(c=>cell(c,population.code,previous(period[0])));if(base.some(v=>!Number.isFinite(v)))return null;let denominator=base.reduce((a,b)=>a+b,0);return denominator>0?sum/denominator*1000:null;
+ let base=codes.map(c=>cell(c,population.code,previous(period[0]),sex));if(base.some(v=>!Number.isFinite(v)))return null;let denominator=base.reduce((a,b)=>a+b,0);return denominator>0?sum/denominator*1000:null;
 }
 function render(){
  const m=el('measure').value,stock=m===population.code;el('mode').disabled=stock;const relative=!stock&&el('mode').value==='relative', periods=groups();
@@ -212,6 +212,30 @@ function renderHistory(rows,relative){
  for(const btn of el('table').querySelectorAll('.history-sort'))btn.addEventListener('click',()=>{const key=btn.dataset.sort;historySort={key,direction:historySort.key===key?-historySort.direction:key.endsWith(':rank')?1:-1};renderHistory(rows,relative);el('table').querySelector('[data-sort="'+key+'"]')?.focus()});
 
 }
+let hits=null,hitsSort={key:'period',direction:-1},hitsChecked=0,hitsMissing=0;
+function calculateHits(){
+ if(hits!==null||!window.regions)return;
+ hits=[];hitsChecked=0;hitsMissing=0;
+ for(const type of ['month','quarter'])for(const p of groups(type))for(const metric of metrics)for(const [sex,sexLabel] of [['total','Totalt'],['men','Män'],['women','Kvinnor']])for(const relative of [false,true]){
+ if(relative&&metric.code===population.code)continue;
+ if(/andel|procent|kvot|medel|per |promille/i.test(metric.label))continue;
+ const vals=window.regions.map(c=>value([c],metric.code,p.months,relative,sex));
+ if(vals.some(v=>!Number.isFinite(v))){hitsMissing++;continue}
+ hitsChecked++;const v=vals[window.regions.indexOf('2580')],rank=1+vals.filter(x=>x>v).length;
+ if(rank<=10)hits.push({period:p.label,type:type==='month'?'Månad':'Kvartal',metric:metric.label,value:v,rank,comparison:relative?'Per 1 000 invånare':'Antal personer',sex:sexLabel,relative});
+ }
+ el('hitsCount').textContent='('+hits.length+')';
+ el('hitsStatus').textContent=hits.length+' träffar av '+hitsChecked.toLocaleString('sv-SE')+' fullständiga jämförelser. '+hitsMissing.toLocaleString('sv-SE')+' jämförelser saknade fullständiga värden. Icke-additiva mått (andelar, kvoter och liknande) ingår inte.';
+ renderHits();
+}
+function renderHits(){
+ if(hits===null)return;
+ const cols=[['period','Period'],['type','Periodtyp'],['metric','Statistikmått'],['value','Värde'],['rank','Placering'],['comparison','Jämförelse'],['sex','Kön']];
+ const ordered=[...hits].sort((a,b)=>{const x=a[hitsSort.key],y=b[hitsSort.key];return (typeof x==='number'?x-y:String(x).localeCompare(String(y),'sv'))*hitsSort.direction||b.period.localeCompare(a.period)||a.rank-b.rank||a.metric.localeCompare(b.metric,'sv')});
+ const heading=([key,label])=>{const active=hitsSort.key===key;return '<th aria-sort="'+(active?(hitsSort.direction===1?'ascending':'descending'):'none')+'"><button type="button" class="history-sort" data-hit-sort="'+key+'">'+label+' <span aria-hidden="true">'+(active?(hitsSort.direction===1?'▲':'▼'):'↕')+'</span></button></th>'};
+ el('hitsTable').innerHTML='<table class="history-table"><thead><tr>'+cols.map(heading).join('')+'</tr></thead><tbody>'+ordered.map(row=>'<tr>'+cols.map(([key])=>'<td'+(key==='rank'?' style="color:#005aa7;font-weight:750"':'')+'>'+esc(key==='value'?row.value.toLocaleString('sv-SE',{maximumFractionDigits:row.relative?2:0}):row[key])+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+ for(const btn of el('hitsTable').querySelectorAll('[data-hit-sort]'))btn.addEventListener('click',()=>{const key=btn.dataset.hitSort;hitsSort={key,direction:hitsSort.key===key?-hitsSort.direction:key==='period'||key==='value'?-1:1};renderHits();el('hitsTable').querySelector('[data-hit-sort="'+key+'"]')?.focus()});
+}
 function renderTop(){
  const p=groups().find(p=>p.label===el('topPeriod').value),m=el('measure').value,relative=m!==population.code&&el('mode').value==='relative';
  if(!p){el('topTable').textContent='Ingen period tillgänglig.';return}
@@ -229,6 +253,7 @@ for(const btn of document.querySelectorAll('.panel-toggle'))btn.addEventListener
  const body=el(btn.getAttribute('aria-controls')),panel=btn.closest('.panel'),collapsed=!body.hidden;
  body.hidden=collapsed;panel.classList.toggle('is-collapsed',collapsed);
  btn.setAttribute('aria-expanded',String(!collapsed));btn.textContent=collapsed?'+ Expandera':'− Minimera';
+ if(body.id==='hitsBody'&&!collapsed)calculateHits();
  const tip=panel.querySelector('.chart-tooltip');if(tip)tip.hidden=true;
 });
 function showHover(target){

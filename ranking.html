@@ -148,7 +148,7 @@ async function fetchRanking(){
 function applyData(data){
  const {regions,entries}=data;window.regionNames=data.regionNames||{};months=data.months;metrics=data.metrics;population=data.population;map.clear();for(const [k,v] of entries)map.set(k,v);
  el('measure').replaceChildren(...metrics.map(m=>new Option(m.label,m.code)));el('measure').value=metrics.find(m=>/^folkökning$/i.test(m.label))?.code||metrics[0].code;
- window.regions=regions;hits=null;el('hitsCount').textContent='';if(!el('hitsBody').hidden)calculateHits();el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1)+' · Totalt: officiell total där tillgänglig, annars män + kvinnor för personantal.';render();
+ window.regions=regions;cachedHits=data.top10?.version===1?data.top10:null;hits=null;el('hitsCount').textContent='';if(!el('hitsBody').hidden)calculateHits();el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1)+' · Totalt: officiell total där tillgänglig, annars män + kvinnor för personantal.';render();
 }
 async function load(){try{const res=await fetch('data/ranking.json',{cache:'no-cache'});if(!res.ok)throw Error('Cache saknas');const data=await res.json();if(data.regions.length!==290||!data.entries.length)throw Error('Ogiltig cache');applyData(data);if(!data.regionNames){try{const meta=await (await retryFetch(BASE+'TAB6473/metadata?lang=sv')).json(),reg=matchVar(metaDimensions(meta),/region/i);window.regionNames=Object.fromEntries(reg.values.map((c,i)=>[c,reg.valueTexts[i]]));render()}catch(e){/* Codes remain visible if names cannot be fetched. */}}el('loading').textContent+=' · Mellanlagrad '+data.updated;}catch(e){el('loading').textContent='Mellanlagrad data saknas; hämtar SCB i mindre grupper …';applyData(await fetchRanking());}}
 function previous(m){let y=+m.slice(0,4),n=+m.slice(-2);return n===1?(y-1)+'M12':y+'M'+String(n-1).padStart(2,'0')}
@@ -212,10 +212,13 @@ function renderHistory(rows,relative){
  for(const btn of el('table').querySelectorAll('.history-sort'))btn.addEventListener('click',()=>{const key=btn.dataset.sort;historySort={key,direction:historySort.key===key?-historySort.direction:key.endsWith(':rank')?1:-1};renderHistory(rows,relative);el('table').querySelector('[data-sort="'+key+'"]')?.focus()});
 
 }
+let cachedHits=null;
 let hits=null,hitsSort={key:'period',direction:-1},hitsChecked=0,hitsMissing=0;
 function calculateHits(){
  if(hits!==null||!window.regions)return;
  hits=[];hitsChecked=0;hitsMissing=0;
+ if(cachedHits){for(const p of Object.values(cachedHits.periods)){hits.push(...p.hits);hitsChecked+=p.checked;hitsMissing+=p.missing;}}
+ else {
  for(const type of ['month','quarter'])for(const p of groups(type))for(const metric of metrics)for(const [sex,sexLabel] of [['total','Totalt'],['men','Män'],['women','Kvinnor']])for(const relative of [false,true]){
  if(relative&&metric.code===population.code)continue;
  if(/andel|procent|kvot|medel|per |promille/i.test(metric.label))continue;
@@ -224,8 +227,10 @@ function calculateHits(){
  hitsChecked++;const v=vals[window.regions.indexOf('2580')],rank=1+vals.filter(x=>x>v).length;
  if(rank<=10)hits.push({period:p.label,type:type==='month'?'Månad':'Kvartal',metric:metric.label,value:v,rank,comparison:relative?'Per 1 000 invånare':'Antal personer',sex:sexLabel,relative});
  }
+ }
  el('hitsCount').textContent='('+hits.length+')';
  el('hitsStatus').textContent=hits.length+' träffar av '+hitsChecked.toLocaleString('sv-SE')+' fullständiga jämförelser. '+hitsMissing.toLocaleString('sv-SE')+' jämförelser saknade fullständiga värden. Icke-additiva mått (andelar, kvoter och liknande) ingår inte.';
+ if(cachedHits)el('hitsStatus').textContent+=' Förberäknat på GitHub.';
  renderHits();
 }
 function renderHits(){

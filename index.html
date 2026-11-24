@@ -242,6 +242,12 @@ function lineSVG(data,metric,sex,mode){const W=560,H=250, left=55,right=18,top=1
  out+='<circle class="data-point" tabindex="0" role="img" aria-label="'+safeAttr(accessible)+'" data-tip="'+safeAttr(detail)+'" cx="'+p[0]+'" cy="'+p[1]+'" r="11" fill="transparent" stroke="transparent"><title>'+safeAttr(accessible)+'</title></circle>';
 });
  });return out+'</svg><div class="legend">'+years.map((y,i)=>{let color=y===latestYear?'#1065b3':y===latestYear-1?'#173e66':['#aab3c2','#8899ad','#697d94','#bec7d2','#93a8bb'][i%5];return '<span><i class="swatch" style="background:'+color+';opacity:'+(y===latestYear?1:.55)+'"></i>'+y+'</span>'}).join('')+'</div>'}
+// Månadsvärden för antal händelser är aldrig negativa. Nettomått är däremot signerade.
+function isNonnegativeFlow(metric){
+ const name=canonicalMeasure(metric);
+ if(/netto|överskott|underskott|förändring|justering|korrigering|folkökning/.test(name))return false;
+ return /född|avlid|död|inflytt|utflytt|invandr|utvandr/.test(name);
+}
 function makeForecast(metric,sex){
  const data=getData(metric,sex),year=latestYear,history=[year-5,year-4,year-3,year-2,year-1];
  const observed=data.filter(r=>+r.month.slice(0,4)===year).sort((a,b)=>a.month.localeCompare(b.month));
@@ -250,6 +256,39 @@ function makeForecast(metric,sex){
  const last=observed[observed.length-1],lastMonth=+last.month.slice(-2);
  const map=new Map(data.map(r=>[r.month,r]));
  const f={...empty,lastMonth},levels={mean:last.value,high:last.value,low:last.value};
+ // För icke-negativa händelseantal används samma kalendermånad historiskt.
+ // Förankra säsongsmönstret i årets senast observerade månad, i stället för
+ // att kedja differenser som kan driva antal födda/döda under noll.
+ if(isNonnegativeFlow(metric)){
+  for(let m=lastMonth+1;m<=12;m++){
+   const samples=[];
+   for(const y of history){
+    const anchor=map.get(y+'M'+String(lastMonth).padStart(2,'0'));
+    const future=map.get(y+'M'+String(m).padStart(2,'0'));
+    if(anchor&&future&&anchor.value>0&&future.value>=0){
+     samples.push({year:y,ratio:future.value/anchor.value});
+    }
+   }
+   if(!samples.length){
+    f.reason='Jämförbar historik saknas för '+monthNames[m-1]+'. Prognosen avbryts där.';
+    break;
+   }
+   const avg=samples.reduce((sum,x)=>sum+x.ratio,0)/samples.length;
+   const highest=samples.reduce((best,x)=>x.ratio>best.ratio?x:best);
+   const lowest=samples.reduce((best,x)=>x.ratio<best.ratio?x:best);
+   const scenarios={mean:{ratio:avg,year:null},high:{ratio:highest.ratio,year:highest.year},low:{ratio:lowest.ratio,year:lowest.year}};
+   const month=year+'M'+String(m).padStart(2,'0');
+   for(const scenario of ['mean','high','low']){
+    const entry=scenarios[scenario];
+    f[{mean:'meanForecast',high:'highForecast',low:'lowForecast'}[scenario]].push({
+     month,value:Math.max(0,last.value)*entry.ratio,forecast:true,scenario,
+     sampleCount:samples.length,sourceYear:entry.year,seasonalRatio:entry.ratio
+    });
+   }
+   f.samples.push(samples.length);
+  }
+  return f;
+ }
  for(let m=lastMonth+1;m<=12;m++){
   const deltas=[];
   for(const y of history){
@@ -374,8 +413,10 @@ function forecastPanel(metric,sex){
   '</div>';
  const count=f.samples.length?Math.min(...f.samples):0;
  const note=f.displayError||f.reason?f.displayError||f.reason:f.meanForecast.length?
-  'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
-  '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
+  (isNonnegativeFlow(metric)?
+   'Från '+monthNames[f.lastMonth-1]+' till december. Historiska säsongskvoter mot senast observerade månad för '+(f.year-5)+'–'+(f.year-1)+'. Minst '+count+' historiska år per månad. Antal kan inte bli negativt. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
+   'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
+  '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.'):
   'Hela året är publicerat; ingen prognos behövs.';
  const subtitle=cumulative?
   (canonicalMeasure(metric)==='befolkning'?'Ackumulerad förändring från januari · valt statistikmått':'Ackumulerad summa från januari · valt statistikmått'):

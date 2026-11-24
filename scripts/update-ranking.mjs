@@ -54,5 +54,47 @@ async function fetchRanking(){
  return {regions,regionNames:Object.fromEntries(reg.values.map((c,i)=>[c,reg.valueTexts[i]])),months,metrics,population,entries:[...map]};
 }
 
-import {mkdir,writeFile,rename} from 'node:fs/promises';
-const data=await fetchRanking();if(data.regions.length!==290||!data.entries.length)throw Error('Tom eller ofullständig leverans');data.updated=new Date().toISOString();await mkdir('data',{recursive:true});await writeFile('data/ranking.json.tmp',JSON.stringify(data));await rename('data/ranking.json.tmp','data/ranking.json');
+import {mkdir,writeFile,rename,readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+function previous(m){let y=+m.slice(0,4),n=+m.slice(-2);return n===1?(y-1)+'M12':y+'M'+String(n-1).padStart(2,'0')}
+function groups(periodType='month'){if(periodType==='month')return months.map(m=>({label:m,months:[m]}));let q=new Map();for(const m of months){let k=m.slice(0,4)+'K'+Math.ceil(+m.slice(-2)/3);if(!q.has(k))q.set(k,[]);q.get(k).push(m)}return [...q].filter(([k,v])=>v.length===3).map(([label,months])=>({label,months}))}
+function cell(c,m,t,sex='total'){
+ const get=k=>map.get([c,m,t,k].join('|'));
+ const direct=get(sex);if(Number.isFinite(direct))return direct;
+ if(sex!=='total')return undefined;
+ const label=metrics.find(x=>x.code===m)?.label||'';
+ if(/andel|procent|kvot|medel|per |promille/i.test(label))return undefined;
+ const a=get('men'),b=get('women');return Number.isFinite(a)&&Number.isFinite(b)?a+b:undefined;
+}
+function value(codes,m,period,relative,sex='total'){
+ const stock=m===population.code, selected=stock?period.slice(-1):period;
+ let values=codes.flatMap(c=>selected.map(t=>cell(c,m,t,sex)));if(values.some(v=>!Number.isFinite(v)))return null;let sum=values.reduce((a,b)=>a+b,0);
+ if(!relative||stock)return sum;
+ let base=codes.map(c=>cell(c,population.code,previous(period[0]),sex));if(base.some(v=>!Number.isFinite(v)))return null;let denominator=base.reduce((a,b)=>a+b,0);return denominator>0?sum/denominator*1000:null;
+}
+
+function calculatePeriod(regions,period,periodType){let hits=[],hitsChecked=0,hitsMissing=0;
+ for(const p of [period])for(const metric of metrics)for(const [sex,sexLabel] of [['total','Totalt'],['men','Män'],['women','Kvinnor']])for(const relative of [false,true]){
+ if(relative&&metric.code===population.code)continue;
+ if(/andel|procent|kvot|medel|per |promille/i.test(metric.label))continue;
+ const vals=regions.map(c=>value([c],metric.code,p.months,relative,sex));
+ if(vals.some(v=>!Number.isFinite(v))){hitsMissing++;continue}
+ hitsChecked++;const v=vals[regions.indexOf('2580')],rank=1+vals.filter(x=>x>v).length;
+ if(rank<=10)hits.push({period:p.label,type:periodType==='month'?'Månad':'Kvartal',metric:metric.label,value:v,rank,comparison:relative?'Per 1 000 invånare':'Antal personer',sex:sexLabel,relative});
+ }
+
+return {hits,checked:hitsChecked,missing:hitsMissing};}
+function top10(data,old){
+ const signature=JSON.stringify([data.regions,data.metrics,data.population]);
+ const byMonth=new Map();for(const [k,v] of data.entries){const m=k.split('|')[2];if(!byMonth.has(m))byMonth.set(m,[]);byMonth.get(m).push([k,v]);}
+ const hashes=new Map([...byMonth].map(([m,entries])=>[m,createHash('sha256').update(JSON.stringify(entries.sort((a,b)=>a[0].localeCompare(b[0])))).digest('hex')]));
+ const periods={};let reused=0,computed=0;
+ for(const type of ['month','quarter'])for(const p of groups(type)){
+ const fingerprint=createHash('sha256').update(JSON.stringify([signature,type,...[previous(p.months[0]),...p.months].map(m=>[m,hashes.get(m)||null])])).digest('hex');
+ const prior=old?.version===1?old.periods?.[p.label]:null;
+ if(prior?.fingerprint===fingerprint){periods[p.label]=prior;reused++;}else{periods[p.label]={fingerprint,...calculatePeriod(data.regions,p,type)};computed++;}
+ }
+ console.log('Top 10: '+computed+' periods calculated, '+reused+' reused');return {version:1,periods};
+}
+
+const data=await fetchRanking();if(data.regions.length!==290||!data.entries.length)throw Error('Tom eller ofullständig leverans');let old=null;try{old=JSON.parse(await readFile('data/ranking.json','utf8'))}catch(e){if(e.code!=='ENOENT')throw e;}data.top10=top10(data,old?.top10);if(old){const {updated,...rest}=old;if(JSON.stringify(rest)===JSON.stringify(data)){console.log('No changed ranking data');process.exit(0);}}data.updated=new Date().toISOString();await mkdir('data',{recursive:true});await writeFile('data/ranking.json.tmp',JSON.stringify(data));await rename('data/ranking.json.tmp','data/ranking.json');

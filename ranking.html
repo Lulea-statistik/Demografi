@@ -71,6 +71,7 @@ body.focus-open{overflow:hidden}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}.hero-brand{gap:12px}.hero-logo{height:48px;max-width:64px}select{min-width:150px}}
 .site-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.site-nav a{padding:8px 16px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:650}.site-nav a[aria-current="page"]{background:var(--accent);color:white;border-color:var(--accent)}
+.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.panel-heading h2{margin:0}.panel-toggle{border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--accent-dark);font:inherit;font-size:.85rem;font-weight:650;padding:5px 10px;cursor:pointer;white-space:nowrap}.panel-toggle:hover{background:#edf5ff}.panel-toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px}.panel-content[hidden]{display:none}.panel.is-collapsed{padding:9px 18px}.panel-content{margin-top:10px}
 </style>
 </head>
 <body>
@@ -81,8 +82,8 @@ body.focus-open{overflow:hidden}
 <main>
 <h2>Ranking bland Sveriges kommuner</h2>
 <div class="filters"><label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label><label>Period <select id="period"><option value="month">Månad</option><option value="quarter">Kvartal</option></select></label><label>Statistikmått <select id="measure"></select></label><label>Jämförelse <select id="mode"><option value="absolute">Antal personer</option><option value="relative">Per 1 000 invånare</option></select></label></div>
-<p id="loading" role="status">Hämtar SCB:s statistik …</p><section class="panel"><h2 id="chartTitle">Ranking över tid</h2><p>Plats 1 = högsta värde. Luleå+Boden jämförs som ett extra område mot Sveriges 290 kommuner; Luleå och Boden finns kvar i referensen.</p><div id="chart"></div><div class="chart-tooltip" role="status" hidden></div><div class="legend"><span><i class="swatch" style="background:#005aa7"></i>Luleå (heldragen)</span><span><i class="swatch" style="height:0;border-top:3px dashed #c62828"></i>Luleå+Boden (streckad)</span><span>Färgintensitet: 100 % vid plats 1–10, 50 % vid plats 281–291 (oberoende av axelns utsnitt).</span></div></section>
-<section class="panel" style="margin-top:18px"><h2>Topp 10 samt Luleå och Luleå+Boden</h2><div class="filters"><label>Tabellperiod <select id="topPeriod"></select></label></div><p>De tio högsta värdena bland kommunerna och jämförelseområdet Luleå+Boden, plus de två fokusområdena om de saknas. Placeringarna följer diagrammets referens med 290 kommuner. Vid lika värden avgör kommunkod ordningen i tabellen.</p><div id="topTable" style="overflow:auto"></div></section><details class="panel" style="margin-top:18px"><summary>Visa värden och ranking</summary><div id="table" style="overflow:auto"></div></details>
+<p id="loading" role="status">Hämtar SCB:s statistik …</p><section class="panel"><div class="panel-heading"><h2 id="chartTitle">Ranking över tid</h2><button type="button" class="panel-toggle" aria-expanded="true" aria-controls="chartBody">− Minimera</button></div><div class="panel-content" id="chartBody"><p>Plats 1 = högsta värde. Luleå+Boden jämförs som ett extra område mot Sveriges 290 kommuner; Luleå och Boden finns kvar i referensen.</p><div id="chart"></div><div class="chart-tooltip" role="status" hidden></div><div class="legend"><span><i class="swatch" style="background:#005aa7"></i>Luleå (heldragen)</span><span><i class="swatch" style="height:0;border-top:3px dashed #c62828"></i>Luleå+Boden (streckad)</span><span>Färgintensitet: 100 % vid plats 1–10, 50 % vid plats 281–291 (oberoende av axelns utsnitt).</span></div></div></section>
+<section class="panel" style="margin-top:18px"><div class="panel-heading"><h2>Topp 10 samt Luleå och Luleå+Boden</h2><button type="button" class="panel-toggle" aria-expanded="true" aria-controls="topBody">− Minimera</button></div><div class="panel-content" id="topBody"><div class="filters"><label>Tabellperiod <select id="topPeriod"></select></label></div><p>De tio högsta värdena bland kommunerna och jämförelseområdet Luleå+Boden, plus de två fokusområdena om de saknas. Placeringarna följer diagrammets referens med 290 kommuner. Vid lika värden avgör kommunkod ordningen i tabellen.</p><div id="topTable" style="overflow:auto"></div></div></section><details class="panel" style="margin-top:18px"><summary>Visa värden och ranking</summary><div id="table" style="overflow:auto"></div></details>
 <footer><strong>Källa:</strong> <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">SCB MBefStatRegionCKM</a>, från januari 2025. Officiella totaler används om de finns, annars beräknas additiva personantal som män + kvinnor. Relativa värden använder folkmängden för valt kön. Kvartal summerar tre fullständiga månader; folkmängd avser kvartalets slut. Relativa flöden divideras med folkmängden vid föregående periods slut (januari 2025 och första kvartalet 2025 saknar därför relativt värde). Luleå+Boden summeras före rangordning. Vid lika värde delas placering: 1 + antalet kommuner med strikt högre värde. Jämförelseområdet kan därmed få plats 291. CKM-osäkerhet kan påverka placeringar och förstärkas vid summering. Höga värden för döda eller utflyttade är inte nödvändigtvis positiva.</footer></main>
 <script>
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
@@ -170,7 +171,8 @@ function render(){
  const ranks=rows.flatMap(r=>r.ranks).filter(Number.isFinite);
  let low=ranks.length?Math.max(1,Math.floor((Math.min(...ranks)-1)/10)*10+1):1,high=ranks.length?Math.min(291,Math.ceil(Math.max(...ranks)/10)*10):291;
  if(high-low<19){if(high<291)high=Math.min(291,high+10);else low=Math.max(1,low-10)}
- const span=high-low+1,W=1000,H=850,L=60,R=30,T=20,B=65,X=i=>L+i*(W-L-R)/Math.max(1,rows.length-1),Y=r=>T+(r-low+.5)*(H-T-B)/span;
+ low=Math.floor((low-1)/10)*10+1;
+ const span=high-low+1,W=1000,H=722.5,L=78,R=30,T=20,B=65,X=i=>L+i*(W-L-R)/Math.max(1,rows.length-1),Y=r=>T+(r-low+.5)*(H-T-B)/span;
  const opacity=rank=>1-.5*Math.min(28,Math.floor((Math.max(1,rank)-1)/10))/28;
  let svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ranking över tid">';
  svg+='<defs>';
@@ -181,7 +183,8 @@ function render(){
  }
  svg+='</defs>';
  for(let lo=low;lo<=high;lo+=10){const hi=Math.min(lo+9,high),y=Y(lo-.5),h=Y(hi+.5)-y;svg+='<rect x="'+L+'" y="'+y+'" width="'+(W-L-R)+'" height="'+h+'" fill="'+(Math.floor((lo-1)/10)%2?'#e8eff6':'#f7f9fc')+'"/>';}
- for(const r of [...new Set([low,...Array.from({length:29},(_,i)=>(i+1)*10).filter(r=>r>=low&&r<=high),high])])svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(r)+'" y2="'+Y(r)+'" stroke="#d9e0e6"/><text x="'+(L-9)+'" y="'+(Y(r)+4)+'" text-anchor="end" font-size="13">'+r+'</text>';
+ for(let lo=low;lo<=high;lo+=10){const hi=Math.min(lo+9,high),y=Y(lo-.5);svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="#d9e0e6"/><text x="'+(L-9)+'" y="'+((Y(lo)+Y(hi))/2+4)+'" text-anchor="end" font-size="12">'+lo+(hi===lo?'':'–'+hi)+'</text>';}
+ svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(high+.5)+'" y2="'+Y(high+.5)+'" stroke="#d9e0e6"/>';
  rows.forEach((row,i)=>{if(i%Math.max(1,Math.ceil(rows.length/14))===0||i===rows.length-1)svg+='<text transform="translate('+X(i)+','+(H-B+12)+') rotate(45)" font-size="12">'+esc(row.label)+'</text>'});
  [0,1].forEach(j=>{let last=null;rows.forEach((row,i)=>{let rank=row.ranks[j];if(rank===null){last=null;return}let x=X(i),y=Y(rank);if(last)svg+='<line x1="'+last[0]+'" y1="'+last[1]+'" x2="'+x+'" y2="'+y+'" stroke="url(#rank-color-'+j+')" stroke-width="3.5"'+(j?' stroke-dasharray="9 5"':'')+'/>';last=[x,y];let tip=(j?'Luleå+Boden':'Luleå')+'\n'+row.label+' · '+el('sex').selectedOptions[0].text+'\n'+metrics.find(x=>x.code===m).label+'\nPlacering: '+rank+'\nVärde: '+row.vals[j].toLocaleString('sv-SE',{maximumFractionDigits:2})+(relative?' per 1 000 invånare':' personer');svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="'+(j?'#ffffff':'#005aa7')+'" fill-opacity="'+(j?1:opacity(rank))+'"'+(j?' stroke="#c62828" stroke-opacity="'+opacity(rank)+'" stroke-width="2"':'')+' pointer-events="none"/><circle class="data-point" tabindex="0" role="img" aria-label="'+esc(tip)+'" data-tip="'+esc(tip)+'" cx="'+x+'" cy="'+y+'" r="10" fill="transparent" stroke="transparent"/>'})});
  el('chart').closest('.panel').querySelector('.chart-tooltip').hidden=true;
@@ -202,6 +205,12 @@ function renderTop(){
  el('topTable').innerHTML='<table style="width:100%;border-collapse:collapse;text-align:left"><thead><tr><th>Placering</th><th>Kommun / område</th><th style="text-align:right">Värde '+(relative?'per 1 000 invånare':'(personer)')+'</th></tr></thead><tbody>'+chosen.map(x=>'<tr style="border-top:1px solid var(--line);'+(x.id==='2580'?'color:#005aa7;font-weight:700':x.id==='pair'?'color:#c62828;font-weight:700':'')+'"><td style="padding:7px">'+rank(x.v)+'</td><td>'+esc(x.name)+'</td><td style="text-align:right">'+x.v.toLocaleString('sv-SE',{maximumFractionDigits:relative?2:0})+'</td></tr>').join('')+'</tbody></table>';
 }
 el('topPeriod').addEventListener('change',renderTop);
+for(const btn of document.querySelectorAll('.panel-toggle'))btn.addEventListener('click',()=>{
+ const body=el(btn.getAttribute('aria-controls')),panel=btn.closest('.panel'),collapsed=!body.hidden;
+ body.hidden=collapsed;panel.classList.toggle('is-collapsed',collapsed);
+ btn.setAttribute('aria-expanded',String(!collapsed));btn.textContent=collapsed?'+ Expandera':'− Minimera';
+ const tip=panel.querySelector('.chart-tooltip');if(tip)tip.hidden=true;
+});
 function showHover(target){
  const panel=target.closest('.panel'),tip=panel?.querySelector('.chart-tooltip');
  if(!tip)return;

@@ -183,7 +183,7 @@ function readablePeriod(period){const match=/^(\d{4})M(0[1-9]|1[0-2])$/.exec(Str
 function safeAttr(text){return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function roleMatch(words){return measures.find(m=>words.some(w=>canonicalMeasure(m).includes(canonicalMeasure(w))))}
 // Välj lättlästa skalsteg (5, 10, 20, 50, 100 ...).
-// Noll inkluderas enbart i förändrings- och kumulativa prognosdiagram.
+// Noll inkluderas enbart i förändrings- och kumulativa scenariodiagram.
 function niceYAxis(values,includeZero=false){
  const finite=values.filter(Number.isFinite);
  if(!finite.length)return {min:0,max:10,ticks:[0,5,10],step:5};
@@ -270,7 +270,7 @@ function makeForecast(metric,sex){
     }
    }
    if(!samples.length){
-    f.reason='Jämförbar historik saknas för '+monthNames[m-1]+'. Prognosen avbryts där.';
+    f.reason='Jämförbar historik saknas för '+monthNames[m-1]+'. Scenariot avbryts där.';
     break;
    }
    const avg=samples.reduce((sum,x)=>sum+x.ratio,0)/samples.length;
@@ -297,7 +297,7 @@ function makeForecast(metric,sex){
    if(before&&after)deltas.push({year:y,delta:after.value-before.value});
   }
   if(!deltas.length){
-   f.reason='Historisk månadsförändring saknas för '+monthNames[m-1]+'. Prognosen avbryts där.';
+   f.reason='Historisk månadsförändring saknas för '+monthNames[m-1]+'. Scenariot avbryts där.';
    break;
   }
   const mean=deltas.reduce((sum,x)=>sum+x.delta,0)/deltas.length;
@@ -354,17 +354,17 @@ function forecastDisplaySeries(f,metric){
 function forecastPanel(metric,sex){
  const raw=makeForecast(metric,sex),f=forecastDisplaySeries(raw,metric),W=560,H=250,left=55,right=18,top=18,bottom=34;
  const cumulative=forecastView==='cumulative'&&!f.displayError;
- if(!f.observed.length)return '<section class="panel"><h2>Prognos till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
+ if(!f.observed.length)return '<section class="panel"><h2>Scenario till årets slut</h2><p>'+safeAttr(f.reason)+'</p></section>';
  const values=[...f.observed,...f.meanForecast,...f.highForecast,...f.lowForecast].map(r=>r.value);
  const axis=niceYAxis(values,cumulative);
  const {min,max,ticks}=axis;
  const X=m=>left+(m-1)*(W-left-right)/11,Y=v=>top+(max-v)/(max-min)*(H-top-bottom);
  const series=[
-  {name:'Låg prognos',rows:f.lowForecast,color:'#b7434b',key:'low'},
-  {name:'Hög prognos',rows:f.highForecast,color:'#2e7d32',key:'high'},
-  {name:'Medelprognos',rows:f.meanForecast,color:'#005aa7',key:'mean'}
+  {name:'Lågt scenario',rows:f.lowForecast,color:'#b7434b',key:'low'},
+  {name:'Högt scenario',rows:f.highForecast,color:'#2e7d32',key:'high'},
+  {name:'Medelscenario',rows:f.meanForecast,color:'#005aa7',key:'mean'}
  ];
- let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade värden och tre prognosalternativ för '+f.year+'">';
+ let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Observerade värden och tre scenarier för '+f.year+'">';
  for(const v of ticks){
   const y=Y(v);
   out+='<line x1="'+left+'" y1="'+y+'" x2="'+(W-right)+'" y2="'+y+'" stroke="'+(cumulative&&v===0?'#3e536a':'#e9edf2')+'" stroke-width="'+(cumulative&&v===0?'1.8':'1')+'"'+(cumulative&&v===0?' stroke-dasharray="5 3"':'')+'/>'+
@@ -407,7 +407,7 @@ function forecastPanel(metric,sex){
   {key:'mean',label:'Medel',row:decMean},
   {key:'low',label:'Låg',row:decLow}
  ];
- const summary='<div class="forecast-summary" aria-label="Prognosvärden för december '+f.year+'">'+
+ const summary='<div class="forecast-summary" aria-label="Scenariovärden för december '+f.year+'">'+
   '<span class="forecast-summary-label">December '+f.year+(cumulative?' · kumulativt':' · månadsvis')+':</span>'+
   summaryValues.map(v=>'<span class="forecast-pill '+v.key+'">'+v.label+': '+(v.row?fmt(Math.round(v.row.value)):'–')+'</span>').join('')+
   '</div>';
@@ -417,15 +417,15 @@ function forecastPanel(metric,sex){
    'Från '+monthNames[f.lastMonth-1]+' till december. Historiska säsongskvoter mot senast observerade månad för '+(f.year-5)+'–'+(f.year-1)+'. Minst '+count+' historiska år per månad. Antal kan inte bli negativt. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.':
    'Från '+monthNames[f.lastMonth-1]+' till december. Månadsspecifik medel-, max- och minförändring för '+(f.year-5)+'–'+(f.year-1)+
   '. Minst '+count+' historiska år per steg. Hög/låg är scenarier, inte statistiska osäkerhetsintervall.'):
-  'Hela året är publicerat; ingen prognos behövs.';
+  'Hela året är publicerat; inget scenario behövs.';
  const subtitle=cumulative?
   (canonicalMeasure(metric)==='befolkning'?'Ackumulerad förändring från januari · valt statistikmått':'Ackumulerad summa från januari · valt statistikmått'):
   'Månadsvärden · valt statistikmått';
- return '<section class="panel"><h2>Prognos '+f.year+' till december</h2><p>Innevarande år · '+subtitle+'</p>'+summary+out+
+ return '<section class="panel"><h2>Scenario '+f.year+' till december</h2><p>Innevarande år · '+subtitle+'</p>'+summary+out+
   '<div class="forecast-key"><span><i></i>Observerat</span>'+
-  '<span><i class="predicted"></i>Medelprognos</span>'+
-  '<span><i class="predicted" style="border-color:#2e7d32"></i>Hög prognos</span>'+
-  '<span><i class="predicted" style="border-color:#b7434b"></i>Låg prognos</span>'+
+  '<span><i class="predicted"></i>Medelscenario</span>'+
+  '<span><i class="predicted" style="border-color:#2e7d32"></i>Högt scenario</span>'+
+  '<span><i class="predicted" style="border-color:#b7434b"></i>Lågt scenario</span>'+
   '<button type="button" class="forecast-toggle" data-forecast-toggle="true" aria-pressed="'+(cumulative?'true':'false')+'">'+(cumulative?'Visa månadsvis':'Visa kumulativ')+'</button></div>'+
   '<p class="forecast-note">'+safeAttr(note)+'</p><div class="chart-tooltip" role="status" hidden></div></section>';
 }

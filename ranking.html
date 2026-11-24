@@ -120,8 +120,9 @@ function selectTotal(v){
 const map=new Map();let months=[], metrics=[], population;
 const el=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-async function load(){
- const url=BASE+'TAB6473', response=await fetch(url+'/metadata?lang=sv');if(!response.ok)throw Error('Metadata: '+response.status);
+async function retryFetch(url){let last;for(let i=0;i<3;i++){try{const r=await fetch(url,{signal:AbortSignal.timeout(30000)});if(r.ok)return r;throw Error('HTTP '+r.status);}catch(e){last=e;if(i<2)await new Promise(r=>setTimeout(r,1000*(i+1)));}}throw Error('SCB '+(url.includes('/metadata')?'metadata':'data')+': '+last.message);}
+async function fetchRanking(){
+ const url=BASE+'TAB6473', response=await retryFetch(url+'/metadata?lang=sv');if(!response.ok)throw Error('Metadata: '+response.status);
  const vars=metaDimensions(await response.json()),reg=matchVar(vars,/region/i),measure=matchVar(vars,/förändring|forandring/i),sex=matchVar(vars,/^(Kon|Kön|Sex)\b|\bkön\b/i),time=vars.find(v=>v.time)||matchVar(vars,/^(Tid|Time|Månad|Manad)\b|\bmånad\b/i);
  if(!reg||!measure||!sex||!time)throw Error('SCB:s variabler kunde inte identifieras.');
  const regions=reg.values.filter(c=>/^\d{4}$/.test(c));if(regions.length!==290||!regions.includes('2580')||!regions.includes('2582'))throw Error('Förväntade 290 kommuner, fick '+regions.length);
@@ -131,15 +132,22 @@ async function load(){
  months=time.values.filter(c=>/^\d{4}M(0[1-9]|1[0-2])$/.test(c)).sort();
  metrics=measure.values.map((code,i)=>({code,label:measure.valueTexts[i]}));population=metrics.find(m=>/^folkmängd$|^befolkning$/i.test(m.label));if(!population)throw Error('Folkmängd saknas.');
  for(let i=0;i<months.length;i+=3){
- const selections=new Map([[reg.code,regions],[measure.code,measure.values],[sex.code,sexCodes],[time.code,months.slice(i,i+3)]]);
+ for(let j=0;j<regions.length;j+=40){
+ const selections=new Map([[reg.code,regions.slice(j,j+40)],[measure.code,measure.values],[sex.code,sexCodes],[time.code,months.slice(i,i+3)]]);
  for(const v of vars)if(!selections.has(v.code)&&!v.elimination)selections.set(v.code,selectTotal(v));
  const params=new URLSearchParams({lang:'sv',outputFormat:'json-stat2'});for(const [k,v] of selections)params.set('valueCodes['+k+']',v.join(','));
- const res=await fetch(url+'/data?'+params);if(!res.ok)throw Error('SCB-data: '+res.status);
+ const res=await retryFetch(url+'/data?'+params);if(!res.ok)throw Error('SCB-data: '+res.status);
  for(const row of records(await res.json()))if(Number.isFinite(row.value)&&regions.includes(row.region))map.set([row.region,row.measureCode,row.month,classify(row.sex)].join('|'),row.value);
  }
+ }
+ return {regions,months,metrics,population,entries:[...map]};
+}
+function applyData(data){
+ const {regions,entries}=data;months=data.months;metrics=data.metrics;population=data.population;map.clear();for(const [k,v] of entries)map.set(k,v);
  el('measure').replaceChildren(...metrics.map(m=>new Option(m.label,m.code)));el('measure').value=metrics.find(m=>/^folkökning$/i.test(m.label))?.code||metrics[0].code;
  window.regions=regions;el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1)+' · Totalt: officiell total där tillgänglig, annars män + kvinnor för personantal.';render();
 }
+async function load(){try{const res=await fetch('data/ranking.json',{cache:'no-cache'});if(!res.ok)throw Error('Cache saknas');const data=await res.json();if(data.regions.length!==290||!data.entries.length)throw Error('Ogiltig cache');applyData(data);el('loading').textContent+=' · Mellanlagrad '+data.updated;}catch(e){el('loading').textContent='Mellanlagrad data saknas; hämtar SCB i mindre grupper …';applyData(await fetchRanking());}}
 function previous(m){let y=+m.slice(0,4),n=+m.slice(-2);return n===1?(y-1)+'M12':y+'M'+String(n-1).padStart(2,'0')}
 function groups(){if(el('period').value==='month')return months.map(m=>({label:m,months:[m]}));let q=new Map();for(const m of months){let k=m.slice(0,4)+'K'+Math.ceil(+m.slice(-2)/3);if(!q.has(k))q.set(k,[]);q.get(k).push(m)}return [...q].filter(([k,v])=>v.length===3).map(([label,months])=>({label,months}))}
 function cell(c,m,t){

@@ -1,0 +1,36 @@
+name: Update SCB ranking
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update-ranking.mjs', '.github/workflows/update-ranking.yml']
+  schedule:
+    - cron: '15 8 * * 1-5'
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: update-ranking
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/update-ranking.mjs
+      - name: Save ranking data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/ranking.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update SCB ranking data"
+          git pull --rebase
+          git push
+      - name: Request Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/${{ github.repository }}/pages/builds

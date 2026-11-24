@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demografi – Luleå kommun</title>
+<link rel="icon" type="image/x-icon" href="https://lulea-statistik.github.io/BR-brottsstatistik/kommun-favicon.ico?v=2">
+<style>
+:root{--bg:#f5f7f9;--card:#fff;--text:#17212b;--muted:#5c6b78;--line:#d9e0e6;--accent:#005aa7;--accent-dark:#003d72;--focus:#0a6dc0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)}
+*{box-sizing:border-box}
+html{font-size:16px} /* Basstorlek: minsta specificerade CSS- och SVG-text överstiger 10 px. */
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.5}
+header.hero{background:#fff;border-bottom:1px solid var(--line);padding:34px max(18px,calc((100vw - 1180px)/2)) 28px}
+.eyebrow{margin:0 0 6px;color:var(--accent);font-weight:700;font-size:.95rem}
+h1{margin:0;font-size:clamp(2rem,5vw,3.4rem);letter-spacing:-.04em;line-height:1.12}
+header.hero .lead{font-size:1.1rem;color:var(--muted);margin:10px 0 0}
+.hero-brand{display:flex;align-items:center;gap:17px;min-width:0}
+.hero-brand-text{min-width:0}
+.hero-logo{height:54px;width:auto;max-width:72px;object-fit:contain;flex:0 0 auto;display:block}
+main{width:min(1180px,calc(100% - 32px));margin:auto;padding:24px 0 45px}
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:end;margin-bottom:18px}
+.filters label{font-size:.9rem;font-weight:650;display:grid;gap:6px}
+select{background:#fff;border:1px solid var(--line);border-radius:8px;min-height:44px;padding:9px 12px;min-width:190px;color:var(--text);font:inherit}
+select:focus-visible,.data-point:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.info{color:var(--muted);font-size:.86rem}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:12px}
+.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card{border-top:4px solid var(--accent);padding:13px 16px 12px;min-width:0;display:flex;flex-direction:column;gap:4px;justify-content:flex-start}
+.card .kpi-label{display:block;color:var(--muted);font-size:.82rem}
+.card .kpi-value{display:block;font-size:1.55rem;font-weight:750;line-height:1.25;color:var(--accent-dark);font-variant-numeric:tabular-nums;margin:3px 0 1px}
+.card .kpi-detail{display:block;color:var(--muted);font-size:.82rem;line-height:1.35}
+.card .kpi-subdetail{display:block;color:var(--muted);font-size:.82rem;line-height:1.35;margin-top:3px}
+.card .kpi-link{display:inline-block;font-size:.82rem;line-height:1.35;margin-top:3px}
+@media(max-width:700px){.cards{grid-template-columns:1fr}.card{padding:13px 15px}}
+@media(min-width:701px) and (max-width:960px){.cards{gap:9px}.card{padding:11px 12px}.card .kpi-value{font-size:1.4rem}}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.panel{position:relative;min-width:0}
+.panel h2{font-size:1.22rem;margin:0 0 4px}
+.panel p{font-size:.85rem;color:var(--muted);margin:0 0 12px}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.data-point{cursor:crosshair;outline:none;touch-action:manipulation}
+.data-point:focus-visible{stroke:var(--accent-dark);stroke-width:2}
+.legend{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:10px}
+.legend span{font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+.swatch{width:18px;height:3px;display:inline-block}
+.status{padding:12px 16px;margin-bottom:18px;background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:7px;color:var(--muted)}
+.error{border-color:#d39898;color:#8c3030}
+.chart-tooltip{position:absolute;z-index:10;pointer-events:none;background:#17212b;color:#fff;border-radius:8px;padding:9px 12px;box-shadow:0 6px 18px #17212b30;max-width:min(270px,90%);font-size:.85rem;line-height:1.5;white-space:pre-line}
+.chart-tooltip[hidden]{display:none}
+footer{font-size:.87rem;line-height:1.65;margin-top:24px;color:var(--muted)}
+a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
+.wide{grid-column:1/-1}
+.status:not(.error){display:none}.forecast-note{font-size:.79rem;color:var(--muted);margin-top:9px}.forecast-key{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin-top:10px}.forecast-key i{display:inline-block;width:22px;border-top:3px solid var(--accent);vertical-align:middle;margin-right:5px}.forecast-key .predicted{border-top-style:dashed}
+.forecast-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:5px 0 11px}
+.forecast-summary-label{font-size:.82rem;color:var(--muted);font-weight:650}
+.forecast-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;background:#f3f6fa;font-size:.82rem;font-weight:700;font-variant-numeric:tabular-nums}
+.forecast-pill.high{color:#2e7d32;border-color:#b9dbbc}
+.forecast-pill.mean{color:#005aa7;border-color:#b8d0ea}
+.forecast-pill.low{color:#b7434b;border-color:#e0b3b7}
+.forecast-toggle{border:1px solid var(--accent);border-radius:8px;background:#fff;color:var(--accent-dark);padding:5px 9px;font:inherit;font-size:.79rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.forecast-toggle:hover{background:#edf5ff}
+.forecast-toggle:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.focus-button{float:right;margin:-2px 0 8px 12px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--accent-dark);font:inherit;font-size:.78rem;font-weight:700;cursor:pointer}
+.focus-button:hover{background:#edf5ff;border-color:var(--accent)}
+.focus-button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.focus-dialog{border:1px solid var(--line);border-radius:14px;padding:12px;width:min(96vw,1500px);max-width:none;max-height:94vh;overflow:auto;background:var(--bg);color:var(--text);box-shadow:0 16px 55px #091f3960}
+.focus-dialog::backdrop{background:#101e2a9c}
+.focus-dialog .panel{width:100%;padding:22px;min-height:0}
+.focus-dialog .panel svg{display:block;width:100%;height:auto}
+.focus-placeholder{border:1px dashed var(--line);border-radius:12px;min-height:220px;background:#edf2f7}
+body.focus-open{overflow:hidden}
+@media(min-width:801px){.grid>.panel{height:100%}}
+@media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}.hero-brand{gap:12px}.hero-logo{height:48px;max-width:64px}select{min-width:150px}}
+.site-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.site-nav a{padding:8px 16px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:650}.site-nav a[aria-current="page"]{background:var(--accent);color:white;border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-brand">
+<img class="hero-logo" src="https://lulea-statistik.github.io/BR-brottsstatistik/lulea-kommun-mark.png?v=3" alt="Luleå kommun" width="72" height="54">
+<div class="hero-brand-text"><p class="eyebrow">Luleå kommun · officiell statistik</p><h1>Demografi – Luleå kommun</h1><p class="lead">SCB:s månadsstatistik · nationell ranking från 2025</p></div>
+</div><nav class="site-nav" aria-label="Sidnavigering"><a href="index.html">Månadsutveckling</a><a href="ranking.html" aria-current="page">Ranking</a></nav></header>
+<main>
+<h2>Ranking bland Sveriges kommuner</h2>
+<div class="filters"><label>Period <select id="period"><option value="month">Månad</option><option value="quarter">Kvartal</option></select></label><label>Statistikmått <select id="measure"></select></label><label>Jämförelse <select id="mode"><option value="absolute">Antal personer</option><option value="relative">Per 1 000 invånare</option></select></label></div>
+<p id="loading" role="status">Hämtar SCB:s statistik …</p><section class="panel"><h2 id="chartTitle">Ranking över tid</h2><p>Plats 1 = högsta värde. Luleå+Boden jämförs som ett extra område mot Sveriges 290 kommuner; Luleå och Boden finns kvar i referensen.</p><div id="chart"></div><div class="legend"><span><i class="swatch" style="background:#005aa7"></i>Luleå</span><span><i class="swatch" style="background:#b7434b"></i>Luleå+Boden</span></div></section>
+<details class="panel" style="margin-top:18px"><summary>Visa värden och ranking</summary><div id="table" style="overflow:auto"></div></details>
+<footer><strong>Källa:</strong> <a href="https://www.statistikdatabasen.scb.se/pxweb/sv/ssd/START__BE__BE0101__BE0101G/MBefStatRegionCKM/">SCB MBefStatRegionCKM</a>, från januari 2025. Officiella totaler för båda könen används. Kvartal summerar tre fullständiga månader; folkmängd avser kvartalets slut. Relativa flöden divideras med folkmängden vid föregående periods slut (januari 2025 och första kvartalet 2025 saknar därför relativt värde). Luleå+Boden summeras före rangordning. Vid lika värde delas placering: 1 + antalet kommuner med strikt högre värde. Jämförelseområdet kan därmed få plats 291. CKM-osäkerhet kan påverka placeringar och förstärkas vid summering. Höga värden för döda eller utflyttade är inte nödvändigtvis positiva.</footer></main>
+<script>
+const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
+const TABLES=[{id:'TAB1625',start:2021,end:2024},{id:'TAB6473',start:2025,end:9999}];
+let all=[], measures=[], latestYear=0, measureCatalog=[], forecastView='monthly';
+let publicationSchedule=null;
+let scbStatusWatcher=null,scbRefreshPending=false;
+const $=id=>document.getElementById(id), fmt=n=>Number(n).toLocaleString('sv-SE',{maximumFractionDigits:0});
+function items(v){return (v.values||v.valueCodes||[]).map((x,i)=>typeof x==='object'?{code:String(x.code??x.value??i),text:String(x.text??x.label??x.code??i)}:{code:String(x),text:String((v.valueTexts||v.valueText||[])[i]??x)});}
+function variable(meta,words){let vars=meta.variables||meta.Variables||[];return vars.find(v=>words.some(w=>String(v.text||v.label||v.code).toLowerCase().includes(w)))}
+function dims(json){return json.id.map((id,i)=>({id,size:json.size[i],cats:json.dimension[id].category,index:json.dimension[id].category.index}))}
+function records(json){const ds=dims(json), vals=json.value||[];let output=[];
+for(let n=0;n<vals.length;n++){const value=vals[n];if(value===null||value===undefined)continue;
+ let residue=n, record={value:Number(value)};for(let k=ds.length-1;k>=0;k--){let d=ds[k], ix=residue%d.size;residue=Math.floor(residue/d.size);
+ let codes=Array.isArray(d.index)?d.index:Object.keys(d.index).sort((a,b)=>d.index[a]-d.index[b]), code=codes[ix], label=d.cats.label?.[code]??code;
+ let key=d.id.toLowerCase();if(/tid|månad|time/.test(key))record.month=code;else if(/region/.test(key))record.region=code;else if(/kön|kon|sex/.test(key))record.sex=String(label);else if(/förändring|forandring/.test(key)){record.measure=String(label);record.measureCode=String(code)}else if(/contentscode|innehåll/.test(key)){record.unitLabel=String(label);record.unitCode=String(code)}}
+ if(/^\d{4}M\d{2}$/.test(record.month||'')&&Number(record.month.slice(0,4))>=2021)output.push(record);
+}return output}
+function metaDimensions(meta){
+ if(Array.isArray(meta.id)&&meta.dimension){
+  return meta.id.map(id=>{const d=meta.dimension[id],cat=d.category||{},idx=cat.index||{},codes=Array.isArray(idx)?idx:Object.keys(idx).sort((a,b)=>idx[a]-idx[b]);return {code:id,text:d.label||id,values:codes,valueTexts:codes.map(c=>cat.label?.[c]||c),elimination:!!d.extension?.elimination,time:(meta.role?.time||[]).includes(id)};});
+ }
+ return meta.variables||meta.Variables||[];
+}
+function matchVar(vars,pattern){return vars.find(v=>pattern.test(String(v.code)+' '+String(v.text)))}
+function selectTotal(v){
+ const codes=v.values||[],labels=v.valueTexts||[];
+ const i=labels.findIndex(x=>/^(totalt|total|samtliga|alla åldrar|summa|båda könen)$/i.test(String(x).trim()));
+ if(i>=0)return [codes[i]];
+ const j=codes.findIndex(x=>/^(TotSa|TotSA|TOTAL|SUM)$/i.test(String(x)));
+ if(j>=0)return [codes[j]];
+ return [codes[0]];
+}
+
+const map=new Map();let months=[], metrics=[], population;
+const el=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+async function load(){
+ const url=BASE+'TAB6473', response=await fetch(url+'/metadata?lang=sv');if(!response.ok)throw Error('Metadata: '+response.status);
+ const vars=metaDimensions(await response.json()),reg=matchVar(vars,/region/i),measure=matchVar(vars,/förändring|forandring/i),sex=matchVar(vars,/^(Kon|Kön|Sex)\b|\bkön\b/i),time=vars.find(v=>v.time)||matchVar(vars,/^(Tid|Time|Månad|Manad)\b|\bmånad\b/i);
+ if(!reg||!measure||!sex||!time)throw Error('SCB:s variabler kunde inte identifieras.');
+ const regions=reg.values.filter(c=>/^\d{4}$/.test(c));if(regions.length!==290||!regions.includes('2580')||!regions.includes('2582'))throw Error('Förväntade 290 kommuner, fick '+regions.length);
+ const total=sex.values[sex.valueTexts.findIndex(x=>/^(totalt|total|båda könen|samtliga)$/i.test(x.trim()))];if(total===undefined)throw Error('Officiell könstotal saknas.');
+ months=time.values.filter(c=>/^\d{4}M(0[1-9]|1[0-2])$/.test(c)).sort();
+ metrics=measure.values.map((code,i)=>({code,label:measure.valueTexts[i]}));population=metrics.find(m=>/^folkmängd$|^befolkning$/i.test(m.label));if(!population)throw Error('Folkmängd saknas.');
+ for(let i=0;i<months.length;i+=6){
+ const selections=new Map([[reg.code,regions],[measure.code,measure.values],[sex.code,[total]],[time.code,months.slice(i,i+6)]]);
+ for(const v of vars)if(!selections.has(v.code)&&!v.elimination)selections.set(v.code,selectTotal(v));
+ const params=new URLSearchParams({lang:'sv',outputFormat:'json-stat2'});for(const [k,v] of selections)params.set('valueCodes['+k+']',v.join(','));
+ const res=await fetch(url+'/data?'+params);if(!res.ok)throw Error('SCB-data: '+res.status);
+ for(const row of records(await res.json()))if(Number.isFinite(row.value)&&regions.includes(row.region))map.set([row.region,row.measureCode,row.month].join('|'),row.value);
+ }
+ el('measure').replaceChildren(...metrics.map(m=>new Option(m.label,m.code)));el('measure').value=metrics.find(m=>/^folkökning$/i.test(m.label))?.code||metrics[0].code;
+ window.regions=regions;el('loading').textContent='SCB: '+months[0]+' – '+months.at(-1);render();
+}
+function previous(m){let y=+m.slice(0,4),n=+m.slice(-2);return n===1?(y-1)+'M12':y+'M'+String(n-1).padStart(2,'0')}
+function groups(){if(el('period').value==='month')return months.map(m=>({label:m,months:[m]}));let q=new Map();for(const m of months){let k=m.slice(0,4)+'K'+Math.ceil(+m.slice(-2)/3);if(!q.has(k))q.set(k,[]);q.get(k).push(m)}return [...q].filter(([k,v])=>v.length===3).map(([label,months])=>({label,months}))}
+function value(codes,m,period,relative){
+ const stock=m===population.code, selected=stock?period.slice(-1):period;
+ let values=codes.flatMap(c=>selected.map(t=>map.get([c,m,t].join('|'))));if(values.some(v=>!Number.isFinite(v)))return null;let sum=values.reduce((a,b)=>a+b,0);
+ if(!relative||stock)return sum;
+ let base=codes.map(c=>map.get([c,population.code,previous(period[0])].join('|')));if(base.some(v=>!Number.isFinite(v)))return null;let denominator=base.reduce((a,b)=>a+b,0);return denominator>0?sum/denominator*1000:null;
+}
+function render(){
+ const m=el('measure').value,stock=m===population.code;el('mode').disabled=stock;const relative=!stock&&el('mode').value==='relative', periods=groups();
+ let rows=periods.map(p=>{let ref=window.regions.map(c=>value([c],m,p.months,relative)),vals=[value(['2580'],m,p.months,relative),value(['2580','2582'],m,p.months,relative)];return {...p,vals,ranks:vals.map(v=>v===null||ref.some(x=>x===null)?null:1+ref.filter(x=>x>v).length)}});
+ const W=1000,H=440,L=60,R=30,T=20,B=65,X=i=>L+i*(W-L-R)/Math.max(1,rows.length-1),Y=r=>T+(r-1)*(H-T-B)/290;
+ let svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Ranking över tid">';
+ for(const r of [1,50,100,150,200,250,291])svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(r)+'" y2="'+Y(r)+'" stroke="#d9e0e6"/><text x="'+(L-9)+'" y="'+(Y(r)+4)+'" text-anchor="end" font-size="13">'+r+'</text>';
+ rows.forEach((row,i)=>{if(i%Math.max(1,Math.ceil(rows.length/14))===0||i===rows.length-1)svg+='<text transform="translate('+X(i)+','+(H-B+12)+') rotate(45)" font-size="12">'+esc(row.label)+'</text>'});
+ ['#005aa7','#b7434b'].forEach((color,j)=>{let last=null;rows.forEach((row,i)=>{let rank=row.ranks[j];if(rank===null){last=null;return}let x=X(i),y=Y(rank);if(last)svg+='<line x1="'+last[0]+'" y1="'+last[1]+'" x2="'+x+'" y2="'+y+'" stroke="'+color+'" stroke-width="3"/>';last=[x,y];let tip=(j?'Luleå+Boden':'Luleå')+' · '+row.label+' · plats '+rank+' · '+row.vals[j].toLocaleString('sv-SE',{maximumFractionDigits:2});svg+='<circle tabindex="0" aria-label="'+esc(tip)+'" cx="'+x+'" cy="'+y+'" r="5" fill="'+color+'"><title>'+esc(tip)+'</title></circle>'})});
+ el('chart').innerHTML=svg+'</svg>';el('chartTitle').textContent='Ranking – '+metrics.find(x=>x.code===m).label+(relative?' per 1 000 invånare':'');
+ const fmt=v=>v===null?'–':v.toLocaleString('sv-SE',{maximumFractionDigits:2});el('table').innerHTML='<table style="width:100%;text-align:right"><thead><tr><th>Period</th><th>Luleå värde</th><th>Placering</th><th>Luleå+Boden värde</th><th>Placering</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.label)+'</td><td>'+fmt(r.vals[0])+'</td><td>'+fmt(r.ranks[0])+'</td><td>'+fmt(r.vals[1])+'</td><td>'+fmt(r.ranks[1])+'</td></tr>').join('')+'</tbody></table>';
+}
+for(const id of ['period','measure','mode'])el(id).addEventListener('change',()=>{if(window.regions)render()});
+load().catch(e=>{el('loading').textContent='Kunde inte läsa SCB: '+e.message;el('loading').className='error'});
+</script></body></html>

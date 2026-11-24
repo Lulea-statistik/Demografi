@@ -70,13 +70,14 @@ a{color:var(--accent)}a:hover{text-decoration-thickness:2px}
 body.focus-open{overflow:hidden}
 @media(min-width:801px){.grid>.panel{height:100%}}
 @media(max-width:800px){.grid{grid-template-columns:1fr}main{width:min(100% - 20px,1180px)}header.hero{padding:26px 12px}.hero-brand{gap:12px}.hero-logo{height:48px;max-width:64px}select{min-width:150px}}
+.site-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.site-nav a{padding:8px 16px;border:1px solid var(--line);border-radius:8px;text-decoration:none;font-weight:650}.site-nav a[aria-current="page"]{background:var(--accent);color:white;border-color:var(--accent)}
 </style>
 </head>
 <body>
 <header class="hero"><div class="hero-brand">
 <img class="hero-logo" src="https://lulea-statistik.github.io/BR-brottsstatistik/lulea-kommun-mark.png?v=3" alt="Luleå kommun" width="72" height="54">
 <div class="hero-brand-text"><p class="eyebrow">Luleå kommun · officiell statistik</p><h1>Demografi – Luleå kommun</h1><p class="lead">SCB:s månadsstatistik · senaste fem hela åren och innevarande år</p></div>
-</div></header>
+</div><nav class="site-nav" aria-label="Sidnavigering"><a href="index.html" aria-current="page">Månadsutveckling</a><a href="ranking.html">Ranking</a></nav></header>
 <main>
 <div class="filters">
 <label>Kön <select id="sex"><option value="total">Totalt</option><option value="men">Män</option><option value="women">Kvinnor</option></select></label>

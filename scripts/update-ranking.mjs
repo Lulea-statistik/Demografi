@@ -51,7 +51,7 @@ async function fetchRanking(){
  for(const row of records(await res.json()))if(Number.isFinite(row.value)&&regions.includes(row.region))map.set([row.region,row.measureCode,row.month,classify(row.sex)].join('|'),row.value);
  }
  }
- return {regions,months,metrics,population,entries:[...map]};
+ return {regions,regionNames:Object.fromEntries(reg.values.map((c,i)=>[c,reg.valueTexts[i]])),months,metrics,population,entries:[...map]};
 }
 
 import {mkdir,writeFile,rename} from 'node:fs/promises';

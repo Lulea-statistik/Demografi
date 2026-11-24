@@ -247,7 +247,7 @@ function renderHits(){
  const sexColors={'Totalt':['#e6e9ef','#374151'],'Män':['#dcebf8','#185486'],'Kvinnor':['#f1e4f4','#743f80']};
  const colored=(row,key)=>{const colors=key==='metric'?metricColors.get(row.metric):key==='sex'?sexColors[row.sex]:null;return colors?' style="background:'+colors[0]+';color:'+colors[1]+';font-weight:600"':key==='rank'?' style="color:#005aa7;font-weight:750"':''};
  const updateRows=()=>{
- const ordered=hits.filter(row=>cols.every(([key])=>normalize(display(row,key)).includes(normalize(hitFilters[key]||'')))).sort((a,b)=>{const x=a[hitsSort.key],y=b[hitsSort.key];return (typeof x==='number'?x-y:String(x).localeCompare(String(y),'sv'))*hitsSort.direction||b.period.localeCompare(a.period)||a.rank-b.rank||a.metric.localeCompare(b.metric,'sv')});
+ const ordered=hits.filter(row=>cols.every(([key])=>{const query=normalize(hitFilters[key]||''),cell=normalize(display(row,key));return key==='comparison'?cell.startsWith(query):cell.includes(query)})).sort((a,b)=>{const x=a[hitsSort.key],y=b[hitsSort.key];return (typeof x==='number'?x-y:String(x).localeCompare(String(y),'sv'))*hitsSort.direction||b.period.localeCompare(a.period)||a.rank-b.rank||a.metric.localeCompare(b.metric,'sv')});
  el('hitsTable').querySelector('tbody').innerHTML=ordered.length?ordered.map(row=>'<tr>'+cols.map(([key])=>'<td'+colored(row,key)+'>'+esc(display(row,key))+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="7" style="text-align:center">Inga träffar för valda sökningar.</td></tr>';
  el('hitsFiltered').textContent='Visar '+ordered.length+' av '+hits.length+' träffar.';
  };

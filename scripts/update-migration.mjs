@@ -10,7 +10,7 @@ function dimensions(meta){return meta.id.map(id=>{const c=meta.dimension[id].cat
 function findDim(ds,re){return ds.find(d=>re.test(d.id+' '+d.name))}
 async function readTable(id,balance=false){
  const url=BASE+id,meta=await request(url+'/metadata?lang=sv'),ds=dimensions(meta);
- const region=findDim(ds,/region/i),sex=findDim(ds,/kön|kon\b|sex/i),age=findDim(ds,/ålder|alder|age/i),time=findDim(ds,/^tid\b|^time\b|^år\b/i),period=findDim(ds,/^period\b/i),measure=findDim(ds,balance?/förändring|forandring/i:/contentscode|tabellinnehåll/i);
+ const region=ds.find(d=>/region/i.test(d.id+' '+d.name)&&!/födelse|fodelse|birth/i.test(d.id+' '+d.name)),sex=findDim(ds,/kön|kon\b|sex/i),age=findDim(ds,/ålder|alder|age/i),time=findDim(ds,/^tid\b|^time\b|^år\b/i),period=findDim(ds,/^period\b/i),measure=findDim(ds,balance?/förändring|forandring/i:/contentscode|tabellinnehåll/i);
  if(!region||!sex||!time||!measure||(!balance&&!age)||!region.codes.includes('2580'))throw Error(id+': okända dimensioner '+ds.map(d=>d.id).join(','));
  console.log(id+' age categories: '+(age?.labels.join(', ')||'none')+'; sex: '+sex.labels.join(', '));
  const select=new Map([[region.id,['2580']],[sex.id,sex.codes.filter((c,i)=>sexKey(sex.labels[i]))],[time.id,time.codes.filter(c=>/^\d{4}$/.test(c)&&+c<new Date().getUTCFullYear())],[measure.id,measure.codes]]);
@@ -22,6 +22,8 @@ async function readTable(id,balance=false){
  }
  if(period){const codes=period.codes.filter((c,i)=>/helår|hela året|^år$/i.test(period.labels[i]));if(codes.length!==1)throw Error(id+': helårsperiod kunde inte identifieras: '+period.labels.join(', '));select.set(period.id,codes)}
  if(!select.get(time.id).length)throw Error(id+': inga avslutade år');
+ const birth=findDim(ds,/födelseregion|fodelseregion|birthregion|födelseland|fodelseland/i);
+ if(birth){const total=birth.codes.find((c,i)=>/totalt|samtliga|båda/i.test(birth.labels[i]));const parts=birth.codes.filter((c,i)=>!/totalt|samtliga|båda/i.test(birth.labels[i]));if(!total&&parts.length!==2)throw Error(id+': unknown birth region categories '+birth.labels.join(', '));select.set(birth.id,total?[total]:parts);console.log(id+' birth region: '+JSON.stringify(select.get(birth.id)));}
  for(const d of ds)if(!select.has(d.id)){if(d.codes.length!==1)throw Error(id+': oidentifierad dimension '+d.id);select.set(d.id,d.codes)}
  const rows=[];
  for(let start=0;start<select.get(time.id).length;start+=8){
@@ -30,7 +32,12 @@ async function readTable(id,balance=false){
  for(let i=0;i<json.size.reduce((a,b)=>a*b,1);i++){const raw=json.value?.[i];if(raw===null||raw===undefined||!Number.isFinite(Number(raw)))continue;let n=i,record={};for(let j=out.length-1;j>=0;j--){const d=out[j],k=n%json.size[j];n=Math.floor(n/json.size[j]);record[d.id]={code:d.codes[k],label:d.labels[k]}}
  const a=age?ageKey(record[age.id].label):'all',s=sexKey(record[sex.id].label);if(a&&s)rows.push([record[time.id].code,a,s,normMeasure(record[measure.id].label),Number(raw)]);
  }}
- if(!rows.length)throw Error(id+': inga data');return rows;
+ if(!rows.length)throw Error(id+': inga data');
+ if(birth){
+ const grouped=new Map();for(const row of rows){const k=JSON.stringify(row.slice(0,4));if(!grouped.has(k))grouped.set(k,[]);grouped.get(k).push(row[4]);}
+ const expected=select.get(birth.id).length;return [...grouped].filter(([,v])=>v.length===expected).map(([k,v])=>[...JSON.parse(k),v.reduce((a,b)=>a+b,0)]);
+ }
+ return rows;
 }
 async function historicalVital(id){
  const url=BASE+id,ds=dimensions(await request(url+'/metadata?lang=sv'));
@@ -51,6 +58,10 @@ async function historicalBalance(){
 }
 async function buildData(){
  const migration=(await Promise.all(migrationIds.map(id=>readTable(id)))).flat();
+ const regionalMeasures=new Set(['inflyttningar från kommuner inom länet','inflyttningar från övriga län','utflyttningar till kommuner inom länet','utflyttningar till övriga län','flyttningsnetto, eget län','flyttningsnetto, övriga län']);
+ const regional=(await Promise.all(['TAB4693','TAB6657'].map(id=>readTable(id)))).flat().filter(row=>regionalMeasures.has(row[3]));
+ if(!regional.length)throw Error('Regional migration: no recognized measures');
+ migration.push(...regional);console.log('Regional migration rows '+regional.length+'; years '+[...new Set(regional.map(r=>r[0]))].sort().join(', '));
  const balance=(await Promise.all([...balanceIds.map(id=>readTable(id,true)),historicalBalance()])).flat();
  return {region:'2580',migration,balance,updated:new Date().toISOString()};
 }

@@ -32,9 +32,26 @@ async function readTable(id,balance=false){
  }}
  if(!rows.length)throw Error(id+': inga data');return rows;
 }
+async function historicalVital(id){
+ const url=BASE+id,ds=dimensions(await request(url+'/metadata?lang=sv'));
+ const region=findDim(ds,/region/i),sex=findDim(ds,/kön|kon\b|sex/i),age=findDim(ds,/ålder|alder|age/i),time=findDim(ds,/^tid\b|^time\b|^år\b/i);
+ if(!region||!sex||!age||!time)throw Error(id+': missing vital dimensions');
+ const total=age.codes.find((c,i)=>ageKey(age.labels[i])==='all'||/totalt|samtliga|alla åldrar/i.test(age.labels[i]));
+ if(!total)throw Error(id+': official age total not found: '+age.labels.join(', '));
+ const params=new URLSearchParams({lang:'sv',outputFormat:'json-stat2'});
+ for(const d of ds){const codes=d===region?['2580']:d===sex?d.codes.filter((c,i)=>sexKey(d.labels[i])):d===age?[total]:d===time?d.codes.filter(c=>/^\d{4}$/.test(c)&&+c>=1968&&+c<=1999):d.codes;if(!codes.length||(![region,sex,age,time].includes(d)&&codes.length!==1))throw Error(id+': unexpected dimension '+d.id);params.set('valueCodes['+d.id+']',codes.join(','));}
+ const json=await request(url+'/data?'+params),out=dimensions(json),result=new Map();
+ for(let i=0;i<json.value.length;i++){const v=json.value[i];if(v==null||!Number.isFinite(Number(v)))continue;let n=i,rec={};for(let j=out.length-1;j>=0;j--){const d=out[j],k=n%json.size[j];n=Math.floor(n/json.size[j]);rec[d.id]={code:d.codes[k],label:d.labels[k]}}const sk=sexKey(rec[sex.id].label);if(sk)result.set(rec[time.id].code+'|'+sk,Number(v));}
+ return result;
+}
+async function historicalBalance(){
+ const [births,deaths]=await Promise.all([historicalVital('TAB1264'),historicalVital('TAB959')]);
+ const rows=[];for(let y=1968;y<=1999;y++)for(const sex of ['men','women']){const k=y+'|'+sex,b=births.get(k),d=deaths.get(k);if(!Number.isFinite(b)||!Number.isFinite(d))throw Error('Historical vital data missing '+k);rows.push([String(y),'all',sex,'födelseöverskott',b-d]);}
+ console.log('Historical birth surplus: '+rows.length+' rows (1968–1999)');return rows;
+}
 async function buildData(){
  const migration=(await Promise.all(migrationIds.map(id=>readTable(id)))).flat();
- const balance=(await Promise.all(balanceIds.map(id=>readTable(id,true)))).flat();
+ const balance=(await Promise.all([...balanceIds.map(id=>readTable(id,true)),historicalBalance()])).flat();
  return {region:'2580',migration,balance,updated:new Date().toISOString()};
 }
 

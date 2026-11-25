@@ -154,13 +154,21 @@ function lookup(map,y,a,s,m){
  const values=Array.from({length:+match[2]-+match[1]+1},(_,i)=>map.get(key(y,'single:'+(+match[1]+i),s,m)));
  return values.every(Number.isFinite)?values.reduce((x,z)=>x+z,0):null;
 }
+function niceAxis(min,max){
+ const raw=Math.max(1,(max-min)/6);
+ const base=10**Math.floor(Math.log10(raw));
+ const interval=([1,2,5,10].find(n=>n*base>=raw)||10)*base;
+ const step=Math.max(1,interval),lo=Math.floor(min/step)*step,hi=Math.max(lo+step,Math.ceil(max/step)*step);
+ return {lo,hi,step};
+}
 function chart(id,labels,series,stacked=false){
  if(!series.some(s=>s.values.some(Number.isFinite))){el(id).textContent='Inga tillgängliga värden för valt urval.';return;}
  const all=labels.map((_,i)=>series.map(s=>s.values[i]).filter(Number.isFinite));
- const lo=Math.min(0,...all.map(v=>stacked?v.filter(x=>x<0).reduce((a,b)=>a+b,0):Math.min(0,...v))),hi=Math.max(1,...all.map(v=>stacked?v.filter(x=>x>0).reduce((a,b)=>a+b,0):Math.max(0,...v)));
+ const min=Math.min(0,...all.map(v=>stacked?v.filter(x=>x<0).reduce((a,b)=>a+b,0):Math.min(0,...v))),max=Math.max(1,...all.map(v=>stacked?v.filter(x=>x>0).reduce((a,b)=>a+b,0):Math.max(0,...v)));
+ const {lo,hi,step:tickStep}=niceAxis(min,max);
  const W=1100,H=410,L=73,R=20,T=20,B=62,step=(W-L-R)/Math.max(1,labels.length),Y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
  let svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(el(id).closest('.panel').querySelector('h2').textContent)+'">';
- for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5;svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="#d9e0e6"/><text x="'+(L-7)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="12">'+fmt(Math.round(v))+'</text>'}
+ for(let v=lo;v<=hi;v+=tickStep){svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="#d9e0e6"/><text x="'+(L-7)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="12">'+fmt(v)+'</text>'}
  svg+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(0)+'" y2="'+Y(0)+'" stroke="#56616c"/>';
  labels.forEach((label,i)=>{let pos=0,neg=0;series.forEach((s,j)=>{const v=s.values[i];if(!Number.isFinite(v))return;const w=step*.8/(stacked?1:series.length),x=L+i*step+step*.1+(stacked?0:j*w),from=stacked?(v>=0?pos:neg):0,to=from+v;if(stacked){if(v>=0)pos=to;else neg=to}const y=Math.min(Y(from),Y(to)),h=Math.abs(Y(from)-Y(to));svg+='<rect x="'+x+'" y="'+y+'" width="'+Math.max(.5,w-1)+'" height="'+Math.max(1,h)+'" fill="'+s.color+'" tabindex="0"><title>'+esc(label+' · '+s.label+': '+fmt(v))+'</title></rect>'});if(i%Math.max(1,Math.ceil(labels.length/20))===0||i===labels.length-1)svg+='<text transform="translate('+(L+i*step+step/2)+','+(H-B+13)+') rotate(45)" font-size="12">'+esc(label)+'</text>'});
  el(id).innerHTML=svg+'</svg><div class="legend">'+series.map(s=>'<span><i class="swatch" style="background:'+s.color+'"></i>'+esc(s.label)+'</span>').join('')+'</div>';

@@ -1,0 +1,36 @@
+name: Update SCB migration
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update-migration.mjs', '.github/workflows/update-migration.yml']
+  schedule:
+    - cron: '30 8 * * 1'
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: update-migration
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/update-migration.mjs
+      - name: Save migration data
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/flyttningar.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Update SCB migration data"
+          git pull --rebase
+          git push
+      - name: Request Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/${{ github.repository }}/pages/builds

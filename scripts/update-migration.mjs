@@ -2,8 +2,8 @@
 const BASE='https://statistikdatabasen.scb.se/api/v2/tables/';
 const migrationIds=['TAB1211','TAB1212','TAB6640'], balanceIds=['TAB5169','TAB6481'];
 const clean=s=>String(s).trim().toLowerCase();
-const sexKey=s=>/^(män|man)$/.test(clean(s))?'men':/^(kvinnor|kvinna)$/.test(clean(s))?'women':/^(totalt|total|båda könen|samtliga)$/.test(clean(s))?'total':null;
-const ageKey=s=>{s=clean(s).replace(/[–—]/g,'-');if(/^(totalt|total|samtliga|alla åldrar|samtliga åldrar|totalt alla åldrar|totalt ålder)$/.test(s))return 'all';let m=s.match(/^(\d+)\s*-\s*(\d+)(?:\s*år)?$/);if(m&&+m[2]===+m[1]+4&&+m[1]%5===0)return m[1]+'-'+m[2];m=s.match(/^(\d+)\s*(?:\+|år och äldre|år eller äldre|år och däröver|år och därutöver|år eller mer|år -|-)$/);if(m&&+m[1]%5===0)return m[1]+'+';m=s.match(/^(\d+)(?:\s*år)?$/);return m?'single:'+m[1]:null};
+const sexKey=s=>/^(män|man)$/.test(clean(s))?'men':/^(kvinnor|kvinna)$/.test(clean(s))?'women':/^(totalt|total|båda könen|samtliga|totalt, samtliga män och kvinnor)$/.test(clean(s))?'total':null;
+const ageKey=s=>{s=clean(s).replace(/[–—]/g,'-');if(/^(totalt|total|samtliga|alla åldrar|samtliga åldrar|totalt alla åldrar|totalt ålder|totalt, samtliga åldrar)$/.test(s))return 'all';let m=s.match(/^(\d+)\s*-\s*(\d+)(?:\s*år)?$/);if(m&&+m[2]===+m[1]+4&&+m[1]%5===0)return m[1]+'-'+m[2];m=s.match(/^(\d+)\s*(?:\+(?:\s*år)?|år och äldre|år eller äldre|år och däröver|år och därutöver|år eller mer|år -|-)$/);if(m&&+m[1]%5===0)return m[1]+'+';m=s.match(/^(\d+)(?:\s*år)?$/);return m?'single:'+m[1]:null};
 const normMeasure=s=>clean(s).replace(/\s+/g,' ');
 async function request(url){let err;for(let i=0;i<3;i++){try{const r=await fetch(url,{signal:AbortSignal.timeout(45000)});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}catch(e){err=e}}throw Error(url+' '+err.message)}
 function dimensions(meta){return meta.id.map(id=>{const c=meta.dimension[id].category,idx=c.index,codes=Array.isArray(idx)?idx:Object.keys(idx).sort((a,b)=>idx[a]-idx[b]);return {id,codes,labels:codes.map(k=>c.label?.[k]||k),name:meta.dimension[id].label||id}})}
@@ -14,7 +14,12 @@ async function readTable(id,balance=false){
  if(!region||!sex||!time||!measure||(!balance&&!age)||!region.codes.includes('2580'))throw Error(id+': okända dimensioner '+ds.map(d=>d.id).join(','));
  console.log(id+' age categories: '+(age?.labels.join(', ')||'none')+'; sex: '+sex.labels.join(', '));
  const select=new Map([[region.id,['2580']],[sex.id,sex.codes.filter((c,i)=>sexKey(sex.labels[i]))],[time.id,time.codes.filter(c=>/^\d{4}$/.test(c)&&+c<new Date().getUTCFullYear())],[measure.id,measure.codes]]);
- if(age)select.set(age.id,age.codes.filter((c,i)=>ageKey(age.labels[i])));
+ if(age){
+ const unique=new Map();
+ for(const [i,c] of age.codes.entries()){const k=ageKey(age.labels[i]);if(!k)continue;const priority=clean(age.labels[i])==='totalt, samtliga åldrar'?2:1;const old=unique.get(k);if(!old||priority>old.priority)unique.set(k,{code:c,priority});}
+ select.set(age.id,[...unique.values()].map(v=>v.code));
+ console.log(id+' selected age totals: '+JSON.stringify([...unique].filter(([k])=>k==='all'||k==='100+'))+'; selected sex: '+JSON.stringify(select.get(sex.id)));
+ }
  if(period){const codes=period.codes.filter((c,i)=>/helår|hela året|^år$/i.test(period.labels[i]));if(codes.length!==1)throw Error(id+': helårsperiod kunde inte identifieras: '+period.labels.join(', '));select.set(period.id,codes)}
  if(!select.get(time.id).length)throw Error(id+': inga avslutade år');
  for(const d of ds)if(!select.has(d.id)){if(d.codes.length!==1)throw Error(id+': oidentifierad dimension '+d.id);select.set(d.id,d.codes)}

@@ -142,7 +142,7 @@ async function buildData(){
 }
 
 const el=id=>document.getElementById(id),fmt=n=>n.toLocaleString('sv-SE'),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const colors=['#005aa7','#c62828','#32866a','#a66e22','#6c5291','#007d86'];
+const colors=['#005aa7','#c62828','#32866a','#a66e22','#6c5291','#455A64'];
 const measures=['inflyttningar','utflyttningar','invandringar','utvandringar','flyttningsöverskott','invandringsöverskott','inrikes inflyttningar','inrikes utflyttningar','inrikes flyttningsöverskott','inflyttningar från kommuner inom länet','inflyttningar från övriga län','utflyttningar till kommuner inom länet','utflyttningar till övriga län','flyttningsnetto, eget län','flyttningsnetto, övriga län'];
 let data,years,ages,mig,bal,ageIndex;
 const key=(y,a,s,m)=>[y,a,s,m].join('|');
